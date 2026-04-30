@@ -1,0 +1,50 @@
+# Build
+build/
+.xmake/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Compiled
+*.o
+*.obj
+*.exe
+*.out
+*.a
+*.so
+*.dylib
+*.dll
+
+# llama.cpp submodule build artifacts
+vendor/llama.cpp/build/
+
+# Ayane model downloads
+models/
+
+# Debug
+*.log
+/tmp/
+
+# --- Private files (NOT for public repo) ---
+# Internal operations
+CLAUDE.md
+lessons.md
+
+# CTO internal directory
+CTO/
+
+# Spec / Proposal / Audit reports
+docs/spec/
+docs/proposal/
+docs/audits/
+
+# Briefs and handoffs
+briefs/
