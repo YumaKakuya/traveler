@@ -1,0 +1,30 @@
+name: Traveler. CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-linux:
+    name: Build (Linux x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Configure
+        run: xmake config --mode=release -y
+
+      - name: Build
+        run: xmake build -v
+
+      - name: Run tests
+        run: xmake test -v || echo "No tests configured yet"

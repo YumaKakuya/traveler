@@ -1,0 +1,147 @@
+name: PR Auto-Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  models: read
+  actions: none
+  checks: none
+  deployments: none
+  issues: none
+  packages: none
+  pages: none
+  repository-projects: none
+  security-events: none
+  statuses: none
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: AI Sanity Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Collect PR diff (size-capped)
+        id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -e
+          mkdir -p /tmp/pr-review
+          gh pr diff "$PR_NUMBER" > /tmp/pr-review/pr-diff-full.txt || true
+          FULL_BYTES=$(wc -c < /tmp/pr-review/pr-diff-full.txt || echo 0)
+          head -c 51200 /tmp/pr-review/pr-diff-full.txt > /tmp/pr-review/pr-diff.txt
+          CAPPED_BYTES=$(wc -c < /tmp/pr-review/pr-diff.txt || echo 0)
+          if [ "$FULL_BYTES" -gt "$CAPPED_BYTES" ]; then
+            echo "diff_truncated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "diff_truncated=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "diff_full_bytes=$FULL_BYTES" >> "$GITHUB_OUTPUT"
+          echo "diff_capped_bytes=$CAPPED_BYTES" >> "$GITHUB_OUTPUT"
+
+      - name: Collect PR metadata
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+          gh pr view "$PR_NUMBER" --json body --jq '.body // ""' > /tmp/pr-review/pr-body.txt
+          AUTHOR_NAME=$(git show -s --format='%an' "$HEAD_SHA" || echo "unknown")
+          AUTHOR_EMAIL=$(git show -s --format='%ae' "$HEAD_SHA" || echo "unknown")
+          echo "head_author_name=$AUTHOR_NAME" >> "$GITHUB_OUTPUT"
+          echo "head_author_email=$AUTHOR_EMAIL" >> "$GITHUB_OUTPUT"
+
+      - name: Build AI review prompt
+        id: prompt
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          HEAD_AUTHOR_NAME: ${{ steps.meta.outputs.head_author_name }}
+          HEAD_AUTHOR_EMAIL: ${{ steps.meta.outputs.head_author_email }}
+          DIFF_TRUNCATED: ${{ steps.diff.outputs.diff_truncated }}
+          DIFF_FULL_BYTES: ${{ steps.diff.outputs.diff_full_bytes }}
+          DIFF_CAPPED_BYTES: ${{ steps.diff.outputs.diff_capped_bytes }}
+        run: |
+          set -e
+          {
+            echo "You are a PR reviewer for Traveler., a C++20/xmake TUI coding agent."
+            echo "Perform a lightweight sanity check. You are NOT approving or merging."
+            echo ""
+            echo "Check A - Scope cohesion: single coherent purpose or mixed changes?"
+            echo "Check B - Commit author: sorted-ai-bot or human CEO?"
+            echo "Check C - Build in Public compliance: no vendor names (Claude/Anthropic/OpenAI) in commit messages or code comments?"
+            echo "Check D - Single-binary discipline: no runtime dependencies (Node/Python/Bun/JVM/.NET) introduced?"
+            echo ""
+            echo "Output: PASS/WARN/FAIL + one-line headline, then 5-10 terse lines for A-D. No hedging. No emojis."
+            echo ""
+            echo "=== PR metadata ==="
+            echo "PR: #${PR_NUMBER} ${PR_TITLE}"
+            echo "Author: ${HEAD_AUTHOR_NAME} <${HEAD_AUTHOR_EMAIL}>"
+            echo "Diff: ${DIFF_FULL_BYTES} bytes (sent: ${DIFF_CAPPED_BYTES}, truncated=${DIFF_TRUNCATED})"
+            echo ""
+            echo "=== PR body ==="
+            cat /tmp/pr-review/pr-body.txt
+            echo ""
+            echo "=== PR diff (capped 50 KB) ==="
+            cat /tmp/pr-review/pr-diff.txt
+          } > /tmp/pr-review/prompt.txt
+
+      - name: Run AI inference
+        id: ai
+        continue-on-error: true
+        uses: actions/ai-inference@v2
+        with:
+          model: openai/gpt-4o-mini
+          prompt-file: /tmp/pr-review/prompt.txt
+          max-tokens: 600
+          token: ${{ github.token }}
+
+      - name: Post review comment
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          AI_RESPONSE: ${{ steps.ai.outputs.response }}
+          AI_OUTCOME: ${{ steps.ai.outcome }}
+          DIFF_TRUNCATED: ${{ steps.diff.outputs.diff_truncated }}
+          DIFF_FULL_BYTES: ${{ steps.diff.outputs.diff_full_bytes }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -e
+          {
+            echo "<!-- traveler-pr-auto-review -->"
+            echo "## PR Auto-Review"
+            echo ""
+            if [ "$AI_OUTCOME" = "success" ] && [ -n "$AI_RESPONSE" ]; then
+              echo "$AI_RESPONSE"
+            else
+              echo "AI inference did not produce a response (outcome=${AI_OUTCOME})."
+              echo "This does not block merge; human review remains authoritative."
+            fi
+            echo ""
+            echo "---"
+            echo "- Model: openai/gpt-4o-mini via actions/ai-inference@v2"
+            echo "- Diff: ${DIFF_FULL_BYTES} bytes (truncated=${DIFF_TRUNCATED})"
+            echo "- Run: ${RUN_URL}"
+            echo ""
+            echo "**AI-generated sanity check. CEO remains final merge authority.**"
+          } > /tmp/pr-review/comment.md
+          gh pr comment "$PR_NUMBER" --body-file /tmp/pr-review/comment.md
