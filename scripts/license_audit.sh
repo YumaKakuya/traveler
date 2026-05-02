@@ -21,17 +21,9 @@ if [[ ! -f "$XMAKE_FILE" ]]; then
   exit 1
 fi
 
-# Read allowlist
-mapfile -t ALLOWLIST < <(grep -v '^#' "$ALLOWLIST_FILE" | grep -v '^$' || true)
-
 is_allowed() {
   local spdx="$1"
-  for a in "${ALLOWLIST[@]}"; do
-    if [[ "$a" == "$spdx" ]]; then
-      return 0
-    fi
-  done
-  return 1
+  grep -v '^#' "$ALLOWLIST_FILE" | grep -v '^$' | grep -Fxq "$spdx"
 }
 
 lookup_metadata() {
