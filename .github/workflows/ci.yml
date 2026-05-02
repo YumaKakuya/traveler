@@ -1,0 +1,77 @@
+name: Traveler. CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.os }} ${{ matrix.arch }} ${{ matrix.build }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 — primary build
+          - { os: ubuntu-latest, arch: x86_64, build: with-llama, runner: ubuntu-latest }
+          # Linux arm64 — requires GitHub-hosted ARM runner (ubuntu-24.04-arm)
+          - { os: ubuntu-24.04-arm, arch: arm64, build: with-llama, runner: ubuntu-24.04-arm }
+          # macOS x86_64
+          - { os: macos-13, arch: x86_64, build: with-llama, runner: macos-13 }
+          # macOS arm64
+          - { os: macos-14, arch: arm64, build: with-llama, runner: macos-14 }
+          # Windows x86_64
+          - { os: windows-2022, arch: x86_64, build: with-llama, runner: windows-2022 }
+          # Without-llama smoke check (runs on linux x86_64 until xmake.lua exposes the flag)
+          - { os: ubuntu-latest, arch: x86_64, build: without-llama, runner: ubuntu-latest }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Configure
+        shell: bash
+        run: |
+          if [ "${{ matrix.build }}" = "without-llama" ]; then
+            xmake config -m release --with_llama=n --asm_hot_paths=n -y
+          else
+            xmake config -m release --with_llama=y --asm_hot_paths=n -y
+          fi
+
+      - name: Build
+        run: xmake build -v
+
+      - name: Run tests
+        run: xmake test -v
+
+      - name: License audit (Unix)
+        if: runner.os != 'Windows'
+        run: bash scripts/license_audit.sh
+
+      - name: License audit (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          pwsh -ExecutionPolicy Bypass -File scripts/license_audit.ps1
+
+      - name: Upload binary artefact
+        if: matrix.build == 'with-llama'
+        uses: actions/upload-artifact@v4
+        with:
+          name: traveler-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            build/**/release/traveler
+            build/**/release/traveler.exe
