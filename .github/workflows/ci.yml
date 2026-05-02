@@ -19,17 +19,17 @@ jobs:
       matrix:
         include:
           # Linux x86_64 — primary build
-          - { os: ubuntu-latest, arch: x86_64, build: with-llama, runner: ubuntu-latest }
+          - { os: ubuntu-latest, arch: x86_64, build: with-llama, runner: ubuntu-latest, xmake_arch: "" }
           # Linux arm64 — requires GitHub-hosted ARM runner (ubuntu-24.04-arm)
-          - { os: ubuntu-24.04-arm, arch: arm64, build: with-llama, runner: ubuntu-24.04-arm }
-          # macOS x86_64
-          - { os: macos-13, arch: x86_64, build: with-llama, runner: macos-13 }
-          # macOS arm64
-          - { os: macos-14, arch: arm64, build: with-llama, runner: macos-14 }
+          - { os: ubuntu-24.04-arm, arch: arm64, build: with-llama, runner: ubuntu-24.04-arm, xmake_arch: "" }
+          # macOS x86_64 target built on macOS arm64 runner to avoid Intel runner starvation
+          - { os: macos-14, arch: x86_64, build: with-llama, runner: macos-14, xmake_arch: x86_64 }
+          # macOS arm64 target
+          - { os: macos-14, arch: arm64, build: with-llama, runner: macos-14, xmake_arch: arm64 }
           # Windows x86_64
-          - { os: windows-2022, arch: x86_64, build: with-llama, runner: windows-2022 }
+          - { os: windows-2022, arch: x86_64, build: with-llama, runner: windows-2022, xmake_arch: "" }
           # Without-llama smoke check (runs on linux x86_64 until xmake.lua exposes the flag)
-          - { os: ubuntu-latest, arch: x86_64, build: without-llama, runner: ubuntu-latest }
+          - { os: ubuntu-latest, arch: x86_64, build: without-llama, runner: ubuntu-latest, xmake_arch: "" }
 
     steps:
       - name: Checkout
@@ -45,10 +45,14 @@ jobs:
       - name: Configure
         shell: bash
         run: |
+          arch_arg=""
+          if [ -n "${{ matrix.xmake_arch }}" ]; then
+            arch_arg="--arch=${{ matrix.xmake_arch }}"
+          fi
           if [ "${{ matrix.build }}" = "without-llama" ]; then
-            xmake config -m release --with_llama=n --asm_hot_paths=n -y
+            xmake config -m release $arch_arg --with_llama=n --asm_hot_paths=n -y
           else
-            xmake config -m release --with_llama=y --asm_hot_paths=n -y
+            xmake config -m release $arch_arg --with_llama=y --asm_hot_paths=n -y
           fi
 
       - name: Build
