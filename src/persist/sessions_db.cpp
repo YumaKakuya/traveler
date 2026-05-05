@@ -2,18 +2,20 @@
 // Reference: Traveler_Phase0_Spec_v0.1.md §7.7 (REQ-SQLITE-1, REQ-SQLITE-2, REQ-SQLITE-3)
 #include "sessions_db.h"
 
+#include <cerrno>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
 #include <sstream>
 #include <sqlite3.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #ifdef _WIN32
+#include <direct.h>
 #include <shlobj.h>
 #else
 #include <pwd.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 namespace traveler::persist {
@@ -70,6 +72,14 @@ static std::string home_directory() {
 #endif
 }
 
+static int make_private_dir(const std::string& dir) {
+#ifdef _WIN32
+    return _mkdir(dir.c_str());
+#else
+    return mkdir(dir.c_str(), 0700);
+#endif
+}
+
 std::string SessionsDb::db_path() {
     // ~/.local/state/traveler/sessions.db
     return home_directory() + "/.local/state/traveler/sessions.db";
@@ -77,16 +87,16 @@ std::string SessionsDb::db_path() {
 
 static tl::expected<void, llm::Error> ensure_db_dir() {
     std::string dir = home_directory() + "/.local/state/traveler";
-    int rc = mkdir(dir.c_str(), 0700);
+    int rc = make_private_dir(dir);
     // Recursively create parent dirs
     std::string local = home_directory() + "/.local";
-    mkdir(local.c_str(), 0700);
+    make_private_dir(local);
     std::string state = home_directory() + "/.local/state";
-    mkdir(state.c_str(), 0700);
+    make_private_dir(state);
 
     if (rc != 0 && errno != EEXIST) {
         // Try again after creating parents
-        rc = mkdir(dir.c_str(), 0700);
+        rc = make_private_dir(dir);
         if (rc != 0 && errno != EEXIST) {
             return tl::make_unexpected(
                 llm::Error::Provider("Cannot create database directory: " + dir));
