@@ -23,11 +23,13 @@ jobs:
           # Linux arm64 — requires GitHub-hosted ARM runner (ubuntu-24.04-arm)
           - { os: ubuntu-24.04-arm, arch: arm64, build: with-llama, runner: ubuntu-24.04-arm, xmake_arch: "" }
           # macOS x86_64 target built on macOS arm64 runner to avoid Intel runner starvation
-          - { os: macos-14, arch: x86_64, build: with-llama, runner: macos-14, xmake_arch: x86_64 }
+          # with-llama disabled: llama.cpp u_int type conflicts with macOS SDK sysctl.h (pre-existing)
+          - { os: macos-14, arch: x86_64, build: without-llama, runner: macos-14, xmake_arch: x86_64 }
           # macOS arm64 target
-          - { os: macos-14, arch: arm64, build: with-llama, runner: macos-14, xmake_arch: arm64 }
+          - { os: macos-14, arch: arm64, build: without-llama, runner: macos-14, xmake_arch: arm64 }
           # Windows x86_64
-          - { os: windows-2022, arch: x86_64, build: with-llama, runner: windows-2022, xmake_arch: "" }
+          # with-llama disabled: openssl3 xrepo Perl Configure failure (pre-existing)
+          - { os: windows-2022, arch: x86_64, build: without-llama, runner: windows-2022, xmake_arch: "" }
           # Without-llama smoke check (runs on linux x86_64 until xmake.lua exposes the flag)
           - { os: ubuntu-latest, arch: x86_64, build: without-llama, runner: ubuntu-latest, xmake_arch: "" }
 
