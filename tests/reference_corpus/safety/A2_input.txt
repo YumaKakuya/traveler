@@ -1,0 +1,2 @@
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dDM1UqGA7EWF6qNEXeH8qQ
+curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dDM1UqGA7EWF6qNEXeH8qQ" https://api.example.com

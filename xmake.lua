@@ -4,7 +4,7 @@ set_languages("c++20")
 
 add_rules("mode.debug", "mode.release")
 
-add_requires("ftxui")
+add_requires("ftxui", "tl_expected")
 
 option("with_llama")
     set_default(true)
@@ -25,7 +25,13 @@ target("traveler")
     add_files("src/core/dispatcher.cpp")
     add_files("src/command/parser.cpp")
     add_files("src/tui/layout.cpp")
-    add_packages("ftxui")
+    add_files("src/roles/parser.cpp")
+    add_files("src/roles/registry.cpp")
+    add_files("src/safety/canonicalize.cpp")
+    add_files("src/safety/pipeline.cpp")
+    add_files("src/safety/event.cpp")
+    add_files("src/safety/queue.cpp")
+    add_files("src/safety/redact.cpp")
     add_options("with_llama", "asm_hot_paths")
     if has_config("with_llama") then
         add_defines("TRAVELER_WITH_LLAMA")
@@ -33,8 +39,51 @@ target("traveler")
     if has_config("asm_hot_paths") then
         add_defines("TRAVELER_ASM_HOT_PATHS")
     end
+    add_packages("ftxui", "tl_expected")
 
 target("hello-ftxui")
     set_kind("binary")
     add_files("experiments/hello-ftxui/src/main.cpp")
     add_packages("ftxui")
+
+-- ============================================================================
+-- GATE-P0-4 Test Targets
+-- ============================================================================
+
+target("test_roles")
+    set_kind("binary")
+    add_includedirs("src")
+    add_files("tests/unit/roles_test.cpp")
+    add_files("src/roles/parser.cpp")
+    add_files("src/roles/registry.cpp")
+    add_packages("tl_expected")
+    add_defines('TRAVELER_PROJECT_DIR="' .. os.projectdir() .. '"')
+    set_group("test")
+
+target("test_safety_corpus")
+    set_kind("binary")
+    add_includedirs("src")
+    add_files("tests/unit/safety_corpus_test.cpp")
+    add_files("src/safety/canonicalize.cpp")
+    add_files("src/safety/pipeline.cpp")
+    add_defines('TRAVELER_PROJECT_DIR="' .. os.projectdir() .. '"')
+    set_group("test")
+
+target("test_safety_queue")
+    set_kind("binary")
+    add_includedirs("src")
+    add_files("tests/unit/safety_queue_test.cpp")
+    add_files("src/safety/queue.cpp")
+    add_files("src/safety/event.cpp")
+    add_files("src/safety/canonicalize.cpp")
+    set_group("test")
+
+target("test_safety_redact")
+    set_kind("binary")
+    add_includedirs("src")
+    add_files("tests/unit/safety_redact_test.cpp")
+    add_files("src/safety/redact.cpp")
+    add_files("src/safety/canonicalize.cpp")
+    add_files("src/safety/queue.cpp")
+    add_files("src/safety/event.cpp")
+    set_group("test")
