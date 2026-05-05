@@ -2,6 +2,8 @@
 #include "session.h"
 
 #include <algorithm>
+#include <array>
+#include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <random>
