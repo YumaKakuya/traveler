@@ -8,10 +8,9 @@ includes("third_party/")
 
 add_requires("ftxui", "tl_expected", "nlohmann_json", "sqlite3")
 
--- Cloud provider support (cpp-httplib TLS) excluded on macOS due to xrepo package
--- verification failure with native Security framework (Undefined symbols for arm64).
--- Ref: PR #9 CI, cpp-httplib v0.41.0 install log.
-if not is_plat("macosx") then
+-- Cloud provider support (cpp-httplib+openssl) gated on macOS (xrepo Security
+-- framework bug) and Windows (openssl3 Perl Configure failure).
+if not is_plat("macosx", "windows") then
     add_requires("openssl")
     add_requires("cpp-httplib", {configs = {ssl = true}})
     add_defines("CPPHTTPLIB_OPENSSL_SUPPORT")
@@ -54,7 +53,7 @@ target("traveler")
     add_files("src/auth/migration.cpp")
     add_files("src/llm/session.cpp")
     add_files("src/persist/sessions_db.cpp")
-    if not is_plat("macosx") then
+    if not is_plat("macosx", "windows") then
         add_files("src/auth/oauth.cpp")
         add_files("src/auth/callback_server.cpp")
         add_files("src/auth/fetch_wrapper.cpp")
@@ -74,7 +73,7 @@ target("traveler")
         add_defines("TRAVELER_ASM_HOT_PATHS")
     end
     add_packages("ftxui", "tl_expected", "nlohmann_json", "sqlite3")
-    if not is_plat("macosx") then
+    if not is_plat("macosx", "windows") then
         add_packages("cpp-httplib", "openssl")
     end
 

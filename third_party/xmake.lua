@@ -75,10 +75,13 @@ target("llama")
     -- GGML_SCHED_MAX_COPIES from ggml/src/CMakeLists.txt:4
     add_defines("GGML_SCHED_MAX_COPIES=4")
 
-    -- Enable OpenMP if available (ggml uses it for CPU backend)
-    add_cflags("-fopenmp")
-    add_cxxflags("-fopenmp")
-    add_ldflags("-fopenmp")
+    -- Enable OpenMP if available (ggml uses it for CPU backend).
+    -- macOS clang does not ship OpenMP by default.
+    if not is_plat("macosx") then
+        add_cflags("-fopenmp")
+        add_cxxflags("-fopenmp")
+        add_ldflags("-fopenmp")
+    end
 
     -- System libraries matching CMake: m (math), dl (Linux), pthread (Threads::Threads)
     add_syslinks("m", "dl", "pthread")
