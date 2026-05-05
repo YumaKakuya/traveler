@@ -6,6 +6,6 @@ tl_expected CC0-1.0
 nlohmann_json MIT
 sqlite3 blessing
 cpp-httplib MIT
-{configs={ssl=true}} MIT
+openssl Apache-2.0
 # Submodules under third_party/
 llama.cpp MIT

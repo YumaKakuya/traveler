@@ -6,8 +6,8 @@ add_rules("mode.debug", "mode.release")
 
 includes("third_party/")
 
-add_requires("ftxui", "tl_expected", "nlohmann_json", "sqlite3")
-add_requires("cpp-httplib", {configs = {ssl = true}})
+add_requires("ftxui", "tl_expected", "nlohmann_json", "sqlite3", "openssl")
+add_requires("cpp-httplib", {configs = {ssl = true, openssl = true}})
 
 option("with_llama")
     set_default(true)
@@ -49,6 +49,11 @@ target("traveler")
     add_files("src/auth/migration.cpp")
     add_files("src/llm/session.cpp")
     add_files("src/persist/sessions_db.cpp")
+    add_files("src/adapters/anthropic_adapter.cpp")
+    add_files("src/adapters/openai_adapter.cpp")
+    add_files("src/adapters/google_adapter.cpp")
+    add_files("src/adapters/llamacpp_adapter.cpp")
+    add_files("src/adapters/tool_call.cpp")
     add_options("with_llama", "asm_hot_paths")
     if has_config("with_llama") then
         add_defines("TRAVELER_WITH_LLAMA")
@@ -58,7 +63,7 @@ target("traveler")
     if has_config("asm_hot_paths") then
         add_defines("TRAVELER_ASM_HOT_PATHS")
     end
-    add_packages("ftxui", "tl_expected", "cpp-httplib", "nlohmann_json", "sqlite3")
+    add_packages("ftxui", "tl_expected", "cpp-httplib", "nlohmann_json", "sqlite3", "openssl")
 
 target("hello-ftxui")
     set_kind("binary")

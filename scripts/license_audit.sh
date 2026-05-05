@@ -35,7 +35,7 @@ failures=0
 
 # 1. Scan xmake.lua dependencies
 echo "=== Scanning xmake.lua dependencies ==="
-deps=$(grep -oE 'add_requires\s*\([^)]+\)' "$XMAKE_FILE" | sed 's/add_requires(//;s/)$//' | tr ',' '\n' | sed 's/[" ]//g' | grep -v '^$' || true)
+deps=$(grep -E '^[[:space:]]*add_requires\(' "$XMAKE_FILE" | grep -oE '"[^"]+"' | tr -d '"' | grep -v '^$' || true)
 
 if [[ -z "$deps" ]]; then
   echo "No add_requires dependencies found in xmake.lua"
