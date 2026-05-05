@@ -3,7 +3,7 @@
 // Reference: Traveler_Phase0_Spec_v0.1.md §7.5 (REQ-OAUTH-5: TB-052 separation, ~/.config/traveler/)
 #pragma once
 
-#include "../llm/provider.h"
+#include "oauth.h"
 #include <optional>
 #include <string>
 #include <string_view>
@@ -30,15 +30,15 @@ struct OAuthCredentials {
 // ============================================================================
 
 // Read credentials for a provider. Returns nullopt if file or key does not exist.
-tl::expected<std::optional<OAuthCredentials>, llm::Error>
+tl::expected<std::optional<OAuthCredentials>, Error>
 read_credentials(std::string_view provider);
 
 // Write credentials for a provider. Creates file/directory if not present.
-tl::expected<void, llm::Error>
+tl::expected<void, Error>
 write_credentials(std::string_view provider, const OAuthCredentials& creds);
 
 // Delete credentials for a provider (logout).
-tl::expected<void, llm::Error>
+tl::expected<void, Error>
 delete_credentials(std::string_view provider);
 
 // Get the path to the credentials file (for diagnostics only — never log tokens).

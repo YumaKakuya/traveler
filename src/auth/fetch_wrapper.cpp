@@ -12,7 +12,6 @@
 #include <array>
 #include <cstdint>
 #include <random>
-#include <set>
 #include <sstream>
 #include <nlohmann/json.hpp>
 
@@ -116,7 +115,7 @@ static json normalize_system(const json& system) {
     return json::array();
 }
 
-tl::expected<std::string, llm::Error>
+tl::expected<std::string, Error>
 inject_billing_and_identity(std::string_view json_body) {
     try {
         json body = json::parse(json_body);
@@ -171,28 +170,32 @@ inject_billing_and_identity(std::string_view json_body) {
 // ============================================================================
 
 std::string merge_betas(std::string_view existing_beta) {
-    std::set<std::string> betas;
+    std::vector<std::string> betas;
     for (const auto* b : BASE_BETAS) {
-        betas.insert(b);
+        if (std::find(betas.begin(), betas.end(), b) == betas.end()) {
+            betas.push_back(b);
+        }
     }
     if (!existing_beta.empty()) {
         std::string existing(existing_beta);
         std::stringstream ss(existing);
         std::string token;
         while (std::getline(ss, token, ',')) {
-            // trim
             auto start = token.find_first_not_of(" \t");
             auto end = token.find_last_not_of(" \t");
             if (start != std::string::npos) {
-                betas.insert(token.substr(start, end - start + 1));
+                auto trimmed = token.substr(start, end - start + 1);
+                if (std::find(betas.begin(), betas.end(), trimmed) == betas.end()) {
+                    betas.push_back(trimmed);
+                }
             }
         }
     }
 
     std::string result;
-    for (auto it = betas.begin(); it != betas.end(); ++it) {
-        if (it != betas.begin()) result += ",";
-        result += *it;
+    for (size_t i = 0; i < betas.size(); ++i) {
+        if (i > 0) result += ",";
+        result += betas[i];
     }
     return result;
 }
@@ -201,10 +204,23 @@ std::string merge_betas(std::string_view existing_beta) {
 // prepare_claude_sub_request
 // ============================================================================
 
-tl::expected<HttpRequest, llm::Error>
+tl::expected<HttpRequest, Error>
 prepare_claude_sub_request(const HttpRequest& original,
                            std::string_view access_token) {
     HttpRequest modified = original;
+
+    // Host check: only apply claude-sub headers for api.anthropic.com
+    {
+        auto host_start = modified.url.find("://");
+        if (host_start != std::string::npos) {
+            host_start += 3;
+            auto host_end = modified.url.find('/', host_start);
+            std::string host = modified.url.substr(host_start, host_end - host_start);
+            if (host != "api.anthropic.com") {
+                return modified;
+            }
+        }
+    }
 
     // (1) Body modification: inject billing and identity
     if (!modified.body.empty()) {

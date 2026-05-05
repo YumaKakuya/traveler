@@ -1,5 +1,6 @@
 // Reference: Traveler_Phase0_Spec_v0.1.md §9.1 (Cockpit Mount Lifecycle)
 #include "cockpit/mount.h"
+#include "cockpit/snapshot.h"
 
 #include <algorithm>
 #include <chrono>
@@ -52,13 +53,21 @@ unmount(CockpitState& state, std::string_view callsign) {
                 std::string(callsign) + " is not mounted"));
     }
 
-    // If this callsign is focused, clear the focus
-    if (state.focused == key) {
-        state.focused.reset();
-    }
+    bool was_focused = (state.focused == key);
 
     // Mark as unmounted
     state.mounts[key].status = CallsignStatus::Unmounted;
+
+    // REQ-COCKPIT-2: If the focused callsign was unmounted,
+    // auto-focus another mounted callsign if any remain.
+    if (was_focused) {
+        state.focused.reset();
+        auto remaining = mounted_callsigns(state);
+        if (!remaining.empty()) {
+            state.focused = remaining.front();
+            state.mounts[remaining.front()].status = CallsignStatus::Focused;
+        }
+    }
 
     return {};
 }
@@ -79,15 +88,22 @@ focus(CockpitState& state, std::string_view callsign) {
         return {};
     }
 
-    // Unfocus the previous callsign if any (REQ-COCKPIT-4 step 1-2)
+    // REQ-COCKPIT-4 step 1: Capture current snapshot before switching
     if (state.focused.has_value()) {
         std::string prev = *state.focused;
         if (is_mounted(state, prev)) {
+            // Capture a snapshot of the current focused callsign
+            (void)capture_snapshot(prev, "", to_string(CallsignStatus::Snapshot));
+            // Transition to Snapshot status
             state.mounts[prev].status = CallsignStatus::Snapshot;
         }
     }
 
-    // Focus the target (REQ-COCKPIT-4 step 3-4)
+    // REQ-COCKPIT-4 step 2-3: Reconstruct target from snapshot+SQLite
+    // Phase 0: invoke capture to simulate restore of the target's snapshot state
+    (void)capture_snapshot(key, "", to_string(CallsignStatus::Focused));
+
+    // REQ-COCKPIT-4 step 4: Render — set focus and status
     state.focused = key;
     state.mounts[key].status = CallsignStatus::Focused;
 
@@ -107,6 +123,26 @@ unfocus(CockpitState& state) {
         state.mounts[prev].status = CallsignStatus::Snapshot;
     }
     state.focused.reset();
+
+    // REQ-COCKPIT-2: If other callsigns remain mounted, auto-focus
+    // the first non-current one. Do not leave zero-focused state when
+    // mounts exist.
+    auto remaining = mounted_callsigns(state);
+    if (!remaining.empty()) {
+        // Prefer a callsign other than the one we just unfocused
+        for (const auto& cs : remaining) {
+            if (cs != prev) {
+                state.focused = cs;
+                state.mounts[cs].status = CallsignStatus::Focused;
+                break;
+            }
+        }
+        // If only the previously-focused callsign is mounted, re-focus it
+        if (!state.focused.has_value()) {
+            state.focused = remaining.front();
+            state.mounts[remaining.front()].status = CallsignStatus::Focused;
+        }
+    }
 
     return {};
 }

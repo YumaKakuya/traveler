@@ -3,11 +3,21 @@
 // Reference: Traveler_Phase0_Spec_v0.1.md §7.5 (REQ-OAUTH-1, REQ-OAUTH-2)
 #pragma once
 
-#include "../llm/provider.h"
 #include <string>
 #include <tl/expected.hpp>
 
 namespace traveler::auth {
+
+// ============================================================================
+// Error type for tl::expected<T, Error> (mirrors traveler::Error pattern)
+// ============================================================================
+struct Error {
+    std::string message;
+
+    [[nodiscard]] static Error Network(std::string msg)  { return {std::move(msg)}; }
+    [[nodiscard]] static Error Auth(std::string msg)     { return {std::move(msg)}; }
+    [[nodiscard]] static Error Provider(std::string msg) { return {std::move(msg)}; }
+};
 
 // ============================================================================
 // OAuth constants (verbatim from Hatch. Gen 1)
@@ -32,11 +42,11 @@ struct PkceCodes {
 
 // Generate a PKCE code pair: random 43-char verifier, SHA-256 → base64url challenge.
 // Faithful to Hatch. generatePKCE() in index.ts.
-tl::expected<PkceCodes, llm::Error> generate_pkce();
+tl::expected<PkceCodes, Error> generate_pkce();
 
 // Generate a random state value for CSRF protection.
 // Faithful to Hatch. generateState() in index.ts.
-tl::expected<std::string, llm::Error> generate_state();
+tl::expected<std::string, Error> generate_state();
 
 // ============================================================================
 // TokenResponse — OAuth token endpoint response
@@ -48,14 +58,14 @@ struct TokenResponse {
 };
 
 // Exchange authorization code for tokens (POST to /v1/oauth/token).
-tl::expected<TokenResponse, llm::Error>
+tl::expected<TokenResponse, Error>
 exchange_code_for_tokens(std::string_view code,
                          std::string_view redirect_uri,
                          std::string_view code_verifier);
 
 // Refresh access token using a refresh token.
 // Uses grant_type=refresh_token against the Anthropic OAuth token endpoint.
-tl::expected<TokenResponse, llm::Error>
+tl::expected<TokenResponse, Error>
 refresh_access_token(std::string_view refresh_token);
 
 // Build the full authorization URL with all parameters.

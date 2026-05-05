@@ -49,25 +49,25 @@ std::string credentials_file_path() {
     return config_dir() + "/credentials.json";
 }
 
-static tl::expected<std::string, llm::Error> ensure_config_dir() {
+static tl::expected<std::string, Error> ensure_config_dir() {
     std::string dir = config_dir();
     // mode 0700 for config directory
     int rc = mkdir(dir.c_str(), 0700);
     if (rc != 0 && errno != EEXIST) {
         return tl::make_unexpected(
-            llm::Error::Provider("Cannot create config directory: " + dir));
+            Error::Provider("Cannot create config directory: " + dir));
     }
     return dir;
 }
 
-static tl::expected<json, llm::Error> read_json_file(const std::string& path) {
+static tl::expected<json, Error> read_json_file(const std::string& path) {
     std::ifstream ifs(path);
     if (!ifs.is_open()) {
         if (errno == ENOENT) {
             return json::object();  // empty file → empty object
         }
         return tl::make_unexpected(
-            llm::Error::Provider("Cannot open credentials file: " + path));
+            Error::Provider("Cannot open credentials file: " + path));
     }
     try {
         json j;
@@ -78,7 +78,7 @@ static tl::expected<json, llm::Error> read_json_file(const std::string& path) {
     }
 }
 
-static tl::expected<void, llm::Error> write_json_file(
+static tl::expected<void, Error> write_json_file(
     const std::string& path, const json& data) {
     // Atomic write: write to temp path, then rename
     std::string tmp_path = path + ".tmp." + std::to_string(getpid()) + "."
@@ -87,7 +87,7 @@ static tl::expected<void, llm::Error> write_json_file(
         std::ofstream ofs(tmp_path, std::ios::trunc);
         if (!ofs.is_open()) {
             return tl::make_unexpected(
-                llm::Error::Provider("Cannot write credentials file: " + tmp_path));
+                Error::Provider("Cannot write credentials file: " + tmp_path));
         }
         ofs << data.dump(2) << "\n";
         ofs.close();
@@ -98,7 +98,7 @@ static tl::expected<void, llm::Error> write_json_file(
     if (rename(tmp_path.c_str(), path.c_str()) != 0) {
         unlink(tmp_path.c_str());
         return tl::make_unexpected(
-            llm::Error::Provider("Cannot finalize credentials file: " + path));
+            Error::Provider("Cannot finalize credentials file: " + path));
     }
     return {};
 }
@@ -116,7 +116,7 @@ bool OAuthCredentials::expired() const noexcept {
 // read / write / delete credentials
 // ============================================================================
 
-tl::expected<std::optional<OAuthCredentials>, llm::Error>
+tl::expected<std::optional<OAuthCredentials>, Error>
 read_credentials(std::string_view provider) {
     auto path = credentials_file_path();
     auto data = read_json_file(path);
@@ -144,7 +144,7 @@ read_credentials(std::string_view provider) {
     return creds;
 }
 
-tl::expected<void, llm::Error>
+tl::expected<void, Error>
 write_credentials(std::string_view provider, const OAuthCredentials& creds) {
     auto dir_result = ensure_config_dir();
     if (!dir_result) return tl::make_unexpected(dir_result.error());
@@ -164,7 +164,7 @@ write_credentials(std::string_view provider, const OAuthCredentials& creds) {
     return write_json_file(path, j);
 }
 
-tl::expected<void, llm::Error>
+tl::expected<void, Error>
 delete_credentials(std::string_view provider) {
     auto path = credentials_file_path();
     auto data_result = read_json_file(path);

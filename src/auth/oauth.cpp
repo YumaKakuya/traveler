@@ -63,7 +63,7 @@ static std::string base64_url_encode(const std::array<std::byte, 32>& digest) {
     return result;
 }
 
-tl::expected<PkceCodes, llm::Error> generate_pkce() {
+tl::expected<PkceCodes, Error> generate_pkce() {
     PkceCodes codes;
     codes.verifier = generate_random_string(43);
 
@@ -76,7 +76,7 @@ tl::expected<PkceCodes, llm::Error> generate_pkce() {
     return codes;
 }
 
-tl::expected<std::string, llm::Error> generate_state() {
+tl::expected<std::string, Error> generate_state() {
     // Generate 32 random bytes → base64url encode
     static thread_local std::random_device rd;
     std::array<uint8_t, 32> bytes;
@@ -131,7 +131,7 @@ std::string build_authorization_url(std::string_view challenge,
 // Token exchange
 // ============================================================================
 
-tl::expected<TokenResponse, llm::Error>
+tl::expected<TokenResponse, Error>
 exchange_code_for_tokens(std::string_view code,
                          std::string_view redirect_uri,
                          std::string_view code_verifier) {
@@ -159,13 +159,12 @@ exchange_code_for_tokens(std::string_view code,
 
         if (!res) {
             return tl::make_unexpected(
-                llm::Error::Network("Token exchange failed: no response"));
+                Error::Network("Token exchange failed: no response"));
         }
         if (res->status != 200) {
             return tl::make_unexpected(
-                llm::Error::Auth("Token exchange failed with status " +
-                                 std::to_string(res->status) + ": " +
-                                 res->body));
+                Error::Auth("Token exchange failed (status " +
+                                 std::to_string(res->status) + ")"));
         }
 
         auto j = json::parse(res->body);
@@ -176,7 +175,7 @@ exchange_code_for_tokens(std::string_view code,
         return tokens;
     } catch (const std::exception& e) {
         return tl::make_unexpected(
-            llm::Error::Network(std::string("Token exchange error: ") + e.what()));
+            Error::Network(std::string("Token exchange error: ") + e.what()));
     }
 }
 
@@ -184,7 +183,7 @@ exchange_code_for_tokens(std::string_view code,
 // Token refresh
 // ============================================================================
 
-tl::expected<TokenResponse, llm::Error>
+tl::expected<TokenResponse, Error>
 refresh_access_token(std::string_view refresh_token) {
     std::ostringstream body;
     body << "grant_type=refresh_token"
@@ -207,11 +206,11 @@ refresh_access_token(std::string_view refresh_token) {
 
         if (!res) {
             return tl::make_unexpected(
-                llm::Error::Network("Token refresh failed: no response"));
+                Error::Network("Token refresh failed: no response"));
         }
         if (res->status != 200) {
             return tl::make_unexpected(
-                llm::Error::Auth("Token refresh failed with status " +
+                Error::Auth("Token refresh failed with status " +
                                  std::to_string(res->status)));
         }
 
@@ -223,7 +222,7 @@ refresh_access_token(std::string_view refresh_token) {
         return tokens;
     } catch (const std::exception& e) {
         return tl::make_unexpected(
-            llm::Error::Network(std::string("Token refresh error: ") + e.what()));
+            Error::Network(std::string("Token refresh error: ") + e.what()));
     }
 }
 

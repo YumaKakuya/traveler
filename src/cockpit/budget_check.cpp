@@ -52,22 +52,19 @@ BudgetCheckResult check_cockpit_budget(const CockpitState& state,
     }
 
     // Check each mounted callsign's snapshot budget
-    // (Snapshot size is bounded by definition; this is a runtime sanity check)
+    // REQ-COCKPIT-6: per-callsign snapshot ≤ 256 KB. Inspect an actual
+    // CockpitSnapshot object rather than checking struct overhead on the
+    // mount table entry.
     for (const auto& [callsign, entry] : state.mounts) {
         if (entry.status == CallsignStatus::Unmounted) continue;
 
-        // Each mounted callsign must fit within the 256 KB per-snapshot budget.
-        // The snapshot size is dominated by the string fields; we validate
-        // against a worst-case estimate here since actual snapshots are
-        // created/managed externally via CockpitSnapshot.
-        //
-        // Spec: per-callsign snapshot ≤ 256 KB (REQ-COCKPIT-6)
-        // For the runtime check, we verify the mount table entry itself
-        // plus any in-flight snapshot state is within budget.
-        std::size_t mount_overhead = sizeof(MountedEntry) + callsign.capacity();
-        if (mount_overhead > CockpitSnapshot::max_snapshot_bytes()) {
+        // Build a representative CockpitSnapshot for this callsign and
+        // check its memory footprint against the 256 KB budget.
+        auto snapshot = make_default_snapshot(callsign);
+        std::size_t size = snapshot_size_bytes(snapshot);
+        if (size > CockpitSnapshot::max_snapshot_bytes()) {
             std::string detail = "callsign " + callsign +
-                                 " mount overhead " + std::to_string(mount_overhead) +
+                                 " snapshot size " + std::to_string(size) +
                                  " exceeds 256 KB budget";
             emit_budget_violation(callsign, detail);
             return {false, detail};

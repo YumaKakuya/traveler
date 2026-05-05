@@ -59,7 +59,7 @@ bool traveler_credentials_exist() {
 // Migration
 // ============================================================================
 
-tl::expected<MigrationResult, llm::Error>
+tl::expected<MigrationResult, Error>
 migrate_hatch_credentials() {
     MigrationResult result;
 
@@ -147,29 +147,9 @@ migrate_hatch_credentials() {
     // Use the Hatch refresh_token to obtain an independent pair
     auto refresh_result = refresh_access_token(refresh_token);
     if (!refresh_result) {
-        // Fall back: copy-as-is with warning
-        OAuthCredentials creds;
-        creds.access_token = access_token;
-        creds.refresh_token = refresh_token;
-        creds.expires_at = expires_at;
-
-        auto write_result = write_credentials("anthropic", creds);
-        if (!write_result) {
-            result.status = MigrationStatus::failed;
-            result.message = "Failed to write Traveler. credentials.";
-            return result;
-        }
-
-        result.status = MigrationStatus::success_shared;
-        result.message =
-            "Hatch. credentials migrated to Traveler. as a shared refresh-token pair "
-            "(Anthropic backend did not issue a new refresh token). Token refresh by "
-            "either Hatch. or Traveler. may invalidate the other tool's session.\n\n"
-            "To avoid session conflicts, use either Hatch. or Traveler. — not both — "
-            "for Anthropic OAuth-authenticated sessions until the next manual "
-            "re-authentication.\n\n"
-            "Recovery: run 'traveler providers logout anthropic && "
-            "traveler providers login anthropic' to obtain a fresh independent token pair.";
+        // Case 1: Refresh HTTP call failed — pass through error, do NOT do shared-pair migration
+        result.status = MigrationStatus::failed;
+        result.message = "Failed to obtain independent token pair: " + refresh_result.error().message;
         return result;
     }
 

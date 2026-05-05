@@ -170,7 +170,7 @@ tl::expected<void, llm::Error> SessionsDb::create_tables() {
     if (!result) return result;
 
     // Set initial schema version
-    std::string set_version = "INSERT OR REPLACE INTO schema_version (version) VALUES ("
+    std::string set_version = "INSERT OR REPLACE INTO schema_version (id, version) VALUES (1, "
                               + std::to_string(kCurrentSchemaVersion) + ")";
     return exec(set_version);
 }

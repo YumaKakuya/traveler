@@ -14,11 +14,14 @@ namespace traveler::cockpit {
 // ============================================================================
 // Cockpit Strip bar — renders the callsign roster at the top of the Cockpit
 //
-// Shows mounted callsigns with the focused one highlighted. Each callsign seat
-// shows: callsign label, status indicator (ready/running/done/error).
+// Always renders exactly 4 fixed-position seats: @vega, @altair, @orion, @rigel.
+// Mounted callsigns fill their respective named seats; unmounted seats display
+// as dim/gray text. The focused callsign's seat is highlighted (bold+inverted).
+// Each mounted seat shows the callsign label and a status indicator
+// (ready/running/done/error).
 //
 // REQ-COCKPIT-2: exactly one focused highlighted.
-// REQ-COCKPIT-4 step 4: render four-callsign Strip with @B highlighted.
+// REQ-COCKPIT-4 step 4: render four-callsign Strip with focused highlighted.
 // REQ-COCKPIT-BG-1: status indicator on Strip seat.
 // ============================================================================
 

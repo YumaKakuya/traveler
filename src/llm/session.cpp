@@ -85,6 +85,11 @@ void Session::on_chunk(GenerateChunk chunk) {
     if (state_ != SessionState::streaming) return;
 
     if (chunk.error_message) {
+        // REQ-SESSION-4: Preserve partial conversation on error
+        if (!partial_content_.empty()) {
+            add_message("assistant", partial_content_ + " [interrupted]");
+            partial_content_.clear();
+        }
         state_ = SessionState::error;
         // Surface the error as a message
         add_message("system", *chunk.error_message);

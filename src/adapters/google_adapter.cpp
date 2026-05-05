@@ -10,9 +10,7 @@
 //  - Auth: ?key=<api_key> query parameter
 #include "google_adapter.h"
 
-#include <sys/socket.h>
-#include <netdb.h>
-#include <unistd.h>
+#include <httplib.h>
 
 #include <algorithm>
 #include <array>
@@ -108,96 +106,7 @@ std::string json_collect_text(const std::string& src) {
     return result;
 }
 
-// --- Minimal TCP HTTP/1.1 POST ---
 
-struct TcpHttpResponse {
-    int status_code{0};
-    std::string body;
-};
-
-tl::expected<TcpHttpResponse, llm::Error>
-tcp_http_post(const std::string& host,
-               const std::string& path,
-               const std::string& json_body,
-               const std::unordered_map<std::string, std::string>& headers) {
-    struct addrinfo hints{};
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-
-    struct addrinfo* result = nullptr;
-    int s = getaddrinfo(host.c_str(), "443", &hints, &result);
-    if (s != 0) {
-        return tl::make_unexpected(llm::Error::Network(
-            "DNS resolution failed: " + host));
-    }
-
-    int sock = ::socket(result->ai_family, result->ai_socktype,
-                        result->ai_protocol);
-    if (sock < 0) {
-        freeaddrinfo(result);
-        return tl::make_unexpected(llm::Error::Network("socket() failed"));
-    }
-
-    int conn_err = ::connect(sock, result->ai_addr, result->ai_addrlen);
-    freeaddrinfo(result);
-    if (conn_err < 0) {
-        ::close(sock);
-        return tl::make_unexpected(llm::Error::Network(
-            "connect() failed to " + host + ":443"));
-    }
-
-    std::ostringstream req;
-    req << "POST " << path << " HTTP/1.1\r\n";
-    req << "Host: " << host << "\r\n";
-    for (const auto& [k, v] : headers) {
-        req << k << ": " << v << "\r\n";
-    }
-    req << "Content-Length: " << json_body.size() << "\r\n";
-    req << "\r\n";
-    req << json_body;
-
-    std::string request = req.str();
-
-    if (::send(sock, request.data(), request.size(), 0) < 0) {
-        ::close(sock);
-        return tl::make_unexpected(llm::Error::Network("send() failed"));
-    }
-
-    std::string raw;
-    std::array<char, 4096> buf{};
-    ssize_t n;
-    while ((n = ::recv(sock, buf.data(), buf.size(), 0)) > 0) {
-        raw.append(buf.data(), static_cast<size_t>(n));
-        if (raw.size() > 10 * 1024 * 1024) break;
-    }
-    ::close(sock);
-
-    if (raw.empty()) {
-        return tl::make_unexpected(llm::Error::Network("Empty response from " + host));
-    }
-
-    size_t eol = raw.find("\r\n");
-    if (eol == std::string::npos) {
-        return tl::make_unexpected(llm::Error::Network("Invalid HTTP response"));
-    }
-
-    int status_code = 0;
-    if (eol > 12) {
-        try {
-            status_code = std::stoi(raw.substr(9, 3));
-        } catch (...) {
-            status_code = 0;
-        }
-    }
-
-    size_t header_end = raw.find("\r\n\r\n");
-    std::string body;
-    if (header_end != std::string::npos) {
-        body = raw.substr(header_end + 4);
-    }
-
-    return TcpHttpResponse{status_code, std::move(body)};
-}
 
 }  // anonymous namespace
 
@@ -370,18 +279,25 @@ GoogleAdapter::generate(const llm::GenerateOptions& opts,
     const int k_max_retries = 3;
     int delay_seconds = 1;
 
-    for (int attempt = 0; attempt <= k_max_retries; ++attempt) {
-        auto resp = tcp_http_post(k_host, k_path, request_json, {
-            {"Content-Type", "application/json"}
-        });
+    httplib::SSLClient cli(k_host);
+    cli.set_connection_timeout(30, 0);
+    cli.set_read_timeout(300, 0);
 
-        if (!resp) {
-            return tl::make_unexpected(resp.error());
+    httplib::Headers http_headers = {
+        {"Content-Type", "application/json"}
+    };
+
+    for (int attempt = 0; attempt <= k_max_retries; ++attempt) {
+        auto res = cli.Post(k_path, http_headers, request_json, "application/json");
+
+        if (!res) {
+            return tl::make_unexpected(llm::Error::Network(
+                "HTTP request failed to " + k_host));
         }
 
         // --- 200 OK: parse SSE stream ---
-        if (resp->status_code == 200) {
-            const std::string& body = resp->body;
+        if (res->status == 200) {
+            const std::string& body = res->body;
             size_t pos = 0;
 
             while (pos < body.size()) {
@@ -424,7 +340,7 @@ GoogleAdapter::generate(const llm::GenerateOptions& opts,
         }
 
         // --- 429: rate limited ---
-        if (resp->status_code == 429) {
+        if (res->status == 429) {
             if (attempt >= k_max_retries) {
                 return tl::make_unexpected(llm::Error::Provider(
                     "Rate limit exceeded after " +
@@ -436,14 +352,14 @@ GoogleAdapter::generate(const llm::GenerateOptions& opts,
         }
 
         // --- 401 / 403: auth failure ---
-        if (resp->status_code == 401 || resp->status_code == 403) {
+        if (res->status == 401 || res->status == 403) {
             return tl::make_unexpected(llm::Error::Auth(
                 "Authentication failed (HTTP " +
-                std::to_string(resp->status_code) + ")"));
+                std::to_string(res->status) + ")"));
         }
 
         return tl::make_unexpected(llm::Error::Provider(
-            "API error (HTTP " + std::to_string(resp->status_code) + ")"));
+            "API error (HTTP " + std::to_string(res->status) + ")"));
     }
 
     return tl::make_unexpected(llm::Error::Provider(

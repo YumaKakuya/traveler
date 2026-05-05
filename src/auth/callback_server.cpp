@@ -105,7 +105,7 @@ static int g_server_port = 1456;
 // start / wait / stop
 // ============================================================================
 
-tl::expected<std::string, llm::Error> start_oauth_server() {
+tl::expected<std::string, Error> start_oauth_server() {
     if (g_server) {
         std::string uri = "http://localhost:" + std::to_string(g_server_port)
                         + OAUTH_REDIRECT_PATH;
@@ -181,12 +181,12 @@ tl::expected<std::string, llm::Error> start_oauth_server() {
     return redirect_uri;
 }
 
-tl::expected<CallbackResult, llm::Error>
+tl::expected<CallbackResult, Error>
 wait_for_oauth_callback(std::string_view expected_state,
                          std::chrono::seconds timeout) {
     if (!g_state) {
         return tl::make_unexpected(
-            llm::Error::Provider("OAuth server not started"));
+            Error::Provider("OAuth server not started"));
     }
 
     g_state->expected_state = std::string(expected_state);

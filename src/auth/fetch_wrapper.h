@@ -7,7 +7,7 @@
 //   - CC_VERSION, SESSION_ID, BASE_BETAS from fetch.ts
 #pragma once
 
-#include "../llm/provider.h"
+#include "oauth.h"
 #include <functional>
 #include <map>
 #include <string>
@@ -64,7 +64,7 @@ struct HttpResponse {
 // ============================================================================
 
 // Get the current access token. Returns empty if no valid token available.
-using TokenProvider = std::function<tl::expected<std::string, llm::Error>()>;
+using TokenProvider = std::function<tl::expected<std::string, Error>()>;
 
 // Create a wrapped HTTP request function that applies claude-sub modifications.
 // Returns a function that takes an HttpRequest and returns an HttpResponse.
@@ -74,19 +74,19 @@ using TokenProvider = std::function<tl::expected<std::string, llm::Error>()>;
 //   - Sets required Anthropic headers
 //   - Calls the underlying HTTP transport
 //   - On 401/403, attempts one token-refresh-and-retry
-using HttpTransport = std::function<tl::expected<HttpResponse, llm::Error>(const HttpRequest&)>;
+using HttpTransport = std::function<tl::expected<HttpResponse, Error>(const HttpRequest&)>;
 
 // Build the modified request. Does NOT execute HTTP — just returns the
 // modified HttpRequest for the caller to execute with their transport.
 // This is the testable, pure-function form of the fetch wrapper.
-tl::expected<HttpRequest, llm::Error>
+tl::expected<HttpRequest, Error>
 prepare_claude_sub_request(const HttpRequest& original,
                            std::string_view access_token);
 
 // Inject billing and identity into a JSON request body string.
 // Modifies the body in-place: strips model suffix, adds billing system entry.
 // Returns the modified JSON string.
-tl::expected<std::string, llm::Error>
+tl::expected<std::string, Error>
 inject_billing_and_identity(std::string_view json_body);
 
 // Merge caller's anthropic-beta header with BASE_BETAS.

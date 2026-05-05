@@ -7,7 +7,7 @@
 // (no rotation), fall back with warning.
 #pragma once
 
-#include "../llm/provider.h"
+#include "oauth.h"
 #include <string>
 #include <tl/expected.hpp>
 
@@ -41,7 +41,7 @@ struct MigrationResult {
 //
 // If the OAuth backend returns the same refresh_token (no rotation), falls
 // back to copy-as-is with a user warning per Spec §7.5 fallback case.
-tl::expected<MigrationResult, llm::Error>
+tl::expected<MigrationResult, Error>
 migrate_hatch_credentials();
 
 }  // namespace traveler::auth
