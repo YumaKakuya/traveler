@@ -240,7 +240,7 @@ parseRoles(const std::string& directory) {
     // --- Body H2 section parsing (roles.ts L99-108) ---
     std::unordered_map<std::string, std::string> bodyPrompts;
     {
-        std::regex h2_regex(R"(^## (.+)$)", std::regex::multiline);
+        std::regex h2_regex(R"(^## (.+)$)", std::regex_constants::multiline);
         std::vector<std::string> headers;
         {
             auto it = std::sregex_iterator(body.begin(), body.end(), h2_regex);
@@ -251,7 +251,7 @@ parseRoles(const std::string& directory) {
         }
 
         // Split body by H2 headers
-        std::regex split_re(R"(^## .+$)", std::regex::multiline);
+        std::regex split_re(R"(^## .+$)", std::regex_constants::multiline);
         std::vector<std::string> sections;
         {
             auto it = std::sregex_token_iterator(body.begin(), body.end(), split_re, -1);
