@@ -68,21 +68,28 @@ target("llama")
     add_defines("GGML_VERSION=\"0.10.2\"")
     -- GGML_BUILD_COMMIT = git rev-parse --short HEAD of the submodule
     add_defines("GGML_COMMIT=\"eff06702b\"")
-    -- POSIX conformance: _XOPEN_SOURCE=600 for M_PI etc. (ggml/src/CMakeLists.txt:148)
-    -- _GNU_SOURCE for Linux-specific extensions (ggml/src/CMakeLists.txt:154)
-    add_defines("_XOPEN_SOURCE=600")
-    add_defines("_GNU_SOURCE")
+    -- POSIX feature macros are platform-specific. `_XOPEN_SOURCE=600` hides
+    -- Darwin BSD typedefs (`u_int`, `u_char`, `u_short`) used by macOS SDK headers.
+    if is_plat("macosx") then
+        add_defines("_DARWIN_C_SOURCE")
+    elseif is_plat("linux") then
+        add_defines("_XOPEN_SOURCE=600")
+        add_defines("_GNU_SOURCE")
+    end
     -- GGML_SCHED_MAX_COPIES from ggml/src/CMakeLists.txt:4
     add_defines("GGML_SCHED_MAX_COPIES=4")
 
-    -- Enable OpenMP if available (ggml uses it for CPU backend).
-    -- macOS clang does not ship OpenMP by default.
-    if not is_plat("macosx") then
+    -- Enable OpenMP only where the CI compiler accepts GCC-style flags.
+    if is_plat("linux") then
         add_cflags("-fopenmp")
         add_cxxflags("-fopenmp")
         add_ldflags("-fopenmp")
     end
 
-    -- System libraries matching CMake: m (math), dl (Linux), pthread (Threads::Threads)
-    add_syslinks("m", "dl", "pthread")
+    -- System libraries matching CMake where they exist on the target platform.
+    if is_plat("linux") then
+        add_syslinks("m", "dl", "pthread")
+    elseif is_plat("macosx") then
+        add_syslinks("m", "pthread")
+    end
 target_end()
