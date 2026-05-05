@@ -1,0 +1,1 @@
+alice@example.com logged in from 10.0.0.1 using api_key=abcdef12345 at /var/log/app

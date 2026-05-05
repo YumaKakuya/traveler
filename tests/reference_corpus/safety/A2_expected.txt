@@ -1,0 +1,2 @@
+Authorization: [MASKED]
+curl -H "Authorization: [MASKED]" [PATH]

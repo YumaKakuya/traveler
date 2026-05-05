@@ -2,5 +2,6 @@
 # Format: <dependency-name> <spdx-identifier>
 # Dependencies declared in xmake.lua
 ftxui MIT
+tl_expected CC0-1.0
 # Submodules under third_party/
 # llama.cpp MIT
