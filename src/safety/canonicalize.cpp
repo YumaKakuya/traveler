@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <functional>
 #include <regex>
 #include <string>
 #include <string_view>
