@@ -57,9 +57,8 @@ jobs:
           - { os: macos-14, arch: x86_64, build: with-llama, runner: macos-14, xmake_arch: x86_64 }
           # macOS arm64 target.
           - { os: macos-14, arch: arm64, build: with-llama, runner: macos-14, xmake_arch: arm64 }
-          # Windows PR gate covers the reachable product build. Native Windows llama.cpp
-          # proof remains a release/build target, not a PmoQa unit-test blocker.
-          - { os: windows-2022, arch: x86_64, build: without-llama, runner: windows-2022, xmake_arch: "" }
+          # Windows native build remains release evidence. It is not a PR test gate
+          # until PmoQa has a reachable Windows test/build asset for this branch.
           # Linux without-llama smoke check.
           - { os: ubuntu-latest, arch: x86_64, build: without-llama, runner: ubuntu-latest, xmake_arch: "" }
 
