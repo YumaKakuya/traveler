@@ -6,11 +6,16 @@ add_rules("mode.debug", "mode.release")
 
 includes("third_party/")
 
-add_requires("ftxui", "tl_expected", "nlohmann_json", "sqlite3", "openssl")
-add_requires("cpp-httplib", {configs = {ssl = true}})
+add_requires("ftxui", "tl_expected", "nlohmann_json", "sqlite3")
 
--- Force cpp-httplib to use OpenSSL on macOS (avoids native Security framework link failure)
-add_defines("CPPHTTPLIB_OPENSSL_SUPPORT")
+-- Cloud provider support (cpp-httplib TLS) excluded on macOS due to xrepo package
+-- verification failure with native Security framework (Undefined symbols for arm64).
+-- Ref: PR #9 CI, cpp-httplib v0.41.0 install log.
+if not is_plat("macosx") then
+    add_requires("openssl")
+    add_requires("cpp-httplib", {configs = {ssl = true}})
+    add_defines("CPPHTTPLIB_OPENSSL_SUPPORT")
+end
 
 option("with_llama")
     set_default(true)
@@ -46,17 +51,19 @@ target("traveler")
     add_files("src/cockpit/budget_check.cpp")
     add_files("src/util/hash.cpp")
     add_files("src/auth/credentials.cpp")
-    add_files("src/auth/oauth.cpp")
-    add_files("src/auth/callback_server.cpp")
-    add_files("src/auth/fetch_wrapper.cpp")
     add_files("src/auth/migration.cpp")
     add_files("src/llm/session.cpp")
     add_files("src/persist/sessions_db.cpp")
-    add_files("src/adapters/anthropic_adapter.cpp")
-    add_files("src/adapters/openai_adapter.cpp")
-    add_files("src/adapters/google_adapter.cpp")
-    add_files("src/adapters/llamacpp_adapter.cpp")
-    add_files("src/adapters/tool_call.cpp")
+    if not is_plat("macosx") then
+        add_files("src/auth/oauth.cpp")
+        add_files("src/auth/callback_server.cpp")
+        add_files("src/auth/fetch_wrapper.cpp")
+        add_files("src/adapters/anthropic_adapter.cpp")
+        add_files("src/adapters/openai_adapter.cpp")
+        add_files("src/adapters/google_adapter.cpp")
+        add_files("src/adapters/llamacpp_adapter.cpp")
+        add_files("src/adapters/tool_call.cpp")
+    end
     add_options("with_llama", "asm_hot_paths")
     if has_config("with_llama") then
         add_defines("TRAVELER_WITH_LLAMA")
@@ -66,7 +73,10 @@ target("traveler")
     if has_config("asm_hot_paths") then
         add_defines("TRAVELER_ASM_HOT_PATHS")
     end
-    add_packages("ftxui", "tl_expected", "cpp-httplib", "nlohmann_json", "sqlite3", "openssl")
+    add_packages("ftxui", "tl_expected", "nlohmann_json", "sqlite3")
+    if not is_plat("macosx") then
+        add_packages("cpp-httplib", "openssl")
+    end
 
 target("hello-ftxui")
     set_kind("binary")
