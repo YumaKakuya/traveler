@@ -7,7 +7,10 @@ add_rules("mode.debug", "mode.release")
 includes("third_party/")
 
 add_requires("ftxui", "tl_expected", "nlohmann_json", "sqlite3", "openssl")
-add_requires("cpp-httplib", {configs = {ssl = true, openssl = true}})
+add_requires("cpp-httplib", {configs = {ssl = true}})
+
+-- Force cpp-httplib to use OpenSSL on macOS (avoids native Security framework link failure)
+add_defines("CPPHTTPLIB_OPENSSL_SUPPORT")
 
 option("with_llama")
     set_default(true)
