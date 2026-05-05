@@ -46,13 +46,18 @@ jobs:
         shell: bash
         run: |
           arch_arg=""
+          plat_arg=""
           if [ -n "${{ matrix.xmake_arch }}" ]; then
             arch_arg="--arch=${{ matrix.xmake_arch }}"
           fi
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            # Git Bash defaults xmake to `mingw`; use the native Windows toolchain.
+            plat_arg="-p windows"
+          fi
           if [ "${{ matrix.build }}" = "without-llama" ]; then
-            xmake config -m release $arch_arg --with_llama=n --asm_hot_paths=n -y
+            xmake config $plat_arg -m release $arch_arg --with_llama=n --asm_hot_paths=n -y
           else
-            xmake config -m release $arch_arg --with_llama=y --asm_hot_paths=n -y
+            xmake config $plat_arg -m release $arch_arg --with_llama=y --asm_hot_paths=n -y
           fi
 
       - name: Build
