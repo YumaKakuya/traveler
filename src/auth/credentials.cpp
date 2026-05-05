@@ -7,14 +7,16 @@
 #include <cstdlib>
 #include <fstream>
 #include <nlohmann/json.hpp>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #ifdef _WIN32
-#include <windows.h>
+#include <direct.h>
+#include <process.h>
 #include <shlobj.h>
+#include <windows.h>
 #else
 #include <pwd.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 namespace traveler::auth {
@@ -45,14 +47,38 @@ static std::string config_dir() {
     return home_directory() + "/.config/traveler";
 }
 
+static int make_private_dir(const std::string& dir) {
+#ifdef _WIN32
+    return _mkdir(dir.c_str());
+#else
+    return mkdir(dir.c_str(), 0700);
+#endif
+}
+
+static int current_process_id() {
+#ifdef _WIN32
+    return _getpid();
+#else
+    return getpid();
+#endif
+}
+
+static void set_private_file_mode(const std::string& path) {
+#ifdef _WIN32
+    (void)path;
+#else
+    chmod(path.c_str(), 0600);
+#endif
+}
+
 std::string credentials_file_path() {
     return config_dir() + "/credentials.json";
 }
 
 static tl::expected<std::string, Error> ensure_config_dir() {
     std::string dir = config_dir();
-    // mode 0700 for config directory
-    int rc = mkdir(dir.c_str(), 0700);
+    // mode 0700 for config directory on POSIX.
+    int rc = make_private_dir(dir);
     if (rc != 0 && errno != EEXIST) {
         return tl::make_unexpected(
             Error::Provider("Cannot create config directory: " + dir));
@@ -81,7 +107,7 @@ static tl::expected<json, Error> read_json_file(const std::string& path) {
 static tl::expected<void, Error> write_json_file(
     const std::string& path, const json& data) {
     // Atomic write: write to temp path, then rename
-    std::string tmp_path = path + ".tmp." + std::to_string(getpid()) + "."
+    std::string tmp_path = path + ".tmp." + std::to_string(current_process_id()) + "."
                            + std::to_string(rand());
     {
         std::ofstream ofs(tmp_path, std::ios::trunc);
@@ -92,11 +118,11 @@ static tl::expected<void, Error> write_json_file(
         ofs << data.dump(2) << "\n";
         ofs.close();
     }
-    // Set mode 0600
-    chmod(tmp_path.c_str(), 0600);
+    // Set mode 0600 where the platform exposes POSIX permissions.
+    set_private_file_mode(tmp_path);
     // Atomic rename
     if (rename(tmp_path.c_str(), path.c_str()) != 0) {
-        unlink(tmp_path.c_str());
+        std::remove(tmp_path.c_str());
         return tl::make_unexpected(
             Error::Provider("Cannot finalize credentials file: " + path));
     }
