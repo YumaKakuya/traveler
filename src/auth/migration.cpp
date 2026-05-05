@@ -7,14 +7,15 @@
 #include <cstdlib>
 #include <fstream>
 #include <nlohmann/json.hpp>
-#include <pwd.h>
 #include <string>
 #include <sys/stat.h>
 #include <tuple>
-#include <unistd.h>
 
 #ifdef _WIN32
 #include <shlobj.h>
+#else
+#include <pwd.h>
+#include <unistd.h>
 #endif
 
 namespace traveler::auth {
