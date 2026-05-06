@@ -171,7 +171,12 @@ bool AnthropicAdapter::supports_streaming() const { return true; }
 std::string AnthropicAdapter::to_request_json(const llm::GenerateOptions& opts) {
     std::ostringstream js;
 
-    js << "{\"model\":\"" << json_escape(opts.model) << "\"";
+    // Strip anthropic/ vendor prefix if present (Spec §7.1: API expects bare model ID)
+    std::string model = opts.model;
+    if (model.compare(0, 10, "anthropic/") == 0) {
+        model = model.substr(10);
+    }
+    js << "{\"model\":\"" << json_escape(model) << "\"";
 
     // max_tokens
     if (opts.max_tokens.has_value()) {
@@ -317,10 +322,6 @@ AnthropicAdapter::generate(const llm::GenerateOptions& opts,
     const int k_max_retries = 3;
     int delay_seconds = 1;
 
-    httplib::SSLClient cli(k_host);
-    cli.set_connection_timeout(30, 0);
-    cli.set_read_timeout(300, 0);
-
     httplib::Headers http_headers = {
         {"Content-Type", "application/json"},
         {"x-api-key", api_key_},
@@ -328,62 +329,88 @@ AnthropicAdapter::generate(const llm::GenerateOptions& opts,
     };
 
     for (int attempt = 0; attempt <= k_max_retries; ++attempt) {
-        auto res = cli.Post(k_path, http_headers, request_json, "application/json");
+        // Fresh SSLClient per attempt — open_stream transfers socket ownership
+        httplib::SSLClient cli(k_host);
+        cli.set_connection_timeout(30, 0);
+        cli.set_read_timeout(300, 0);
 
-        if (!res) {
+        auto handle = cli.open_stream("POST", k_path, {},
+                                      http_headers, request_json,
+                                      "application/json");
+
+        if (!handle.is_valid()) {
             return tl::make_unexpected(llm::Error::Network(
                 "HTTP request failed to " + k_host));
         }
 
-        // --- 200 OK: parse SSE stream ---
-        if (res->status == 200) {
-            const std::string& body = res->body;
-            size_t pos = 0;
+        // --- 200 OK: read SSE stream incrementally ---
+        if (handle.response->status == 200) {
+            std::array<char, 4096> buf{};
+            std::string sse_buffer;
 
-            while (pos < body.size()) {
-                // Seek to next "data: " prefix
-                auto data_start = body.find("data: ", pos);
-                if (data_start == std::string::npos) break;
-
-                data_start += 6;  // skip "data: "
-                auto data_end = body.find('\n', data_start);
-                std::string data_line;
-                if (data_end != std::string::npos) {
-                    data_line = body.substr(data_start,
-                        data_end - data_start);
-                    pos = data_end + 1;
-                } else {
-                    data_line = body.substr(data_start);
-                    pos = body.size();
-                }
-
-                // Trim trailing \r
-                if (!data_line.empty() && data_line.back() == '\r') {
-                    data_line.pop_back();
-                }
-
-                if (data_line.empty()) continue;
-
-                auto chunk = from_sse_line(data_line);
-                if (!chunk) {
+            while (true) {
+                auto n = handle.read(buf.data(), buf.size());
+                if (n < 0) {
+                    // Read error from stream
                     llm::GenerateChunk err_chunk;
                     err_chunk.done = true;
-                    err_chunk.error_message =
-                        "SSE parse error: " + chunk.error().message;
+                    err_chunk.error_message = "Stream read error";
                     on_chunk(err_chunk);
                     return {};
                 }
+                if (n == 0) break; // EOF
 
-                on_chunk(*chunk);
-                if (chunk->done) return {};
+                sse_buffer.append(buf.data(), static_cast<size_t>(n));
+
+                // Process complete SSE lines as they arrive
+                size_t pos = 0;
+                while (pos < sse_buffer.size()) {
+                    auto nl = sse_buffer.find('\n', pos);
+                    if (nl == std::string::npos) break;
+
+                    std::string line = sse_buffer.substr(pos, nl - pos);
+                    pos = nl + 1;
+
+                    // Trim trailing \r
+                    if (!line.empty() && line.back() == '\r')
+                        line.pop_back();
+
+                    // Parse "data: " prefix
+                    if (line.compare(0, 6, "data: ") != 0)
+                        continue;
+
+                    std::string data = line.substr(6);
+                    if (data.empty()) continue;
+
+                    auto chunk = from_sse_line(data);
+                    if (!chunk) {
+                        llm::GenerateChunk err_chunk;
+                        err_chunk.done = true;
+                        err_chunk.error_message =
+                            "SSE parse error: " + chunk.error().message;
+                        on_chunk(err_chunk);
+                        return {};
+                    }
+
+                    on_chunk(*chunk);
+                    if (chunk->done) return {};
+                }
+
+                // Keep unprocessed trailing partial line
+                if (pos >= sse_buffer.size()) {
+                    sse_buffer.clear();
+                } else {
+                    sse_buffer = sse_buffer.substr(pos);
+                }
             }
 
-            // Normal stream completion
+            // Stream ended (EOF) — send final done callback
+            on_chunk(llm::GenerateChunk{"", true});
             return {};
         }
 
         // --- 429: rate limited — exponential backoff ---
-        if (res->status == 429) {
+        if (handle.response->status == 429) {
             if (attempt >= k_max_retries) {
                 return tl::make_unexpected(llm::Error::Provider(
                     "Rate limit exceeded after " +
@@ -395,15 +422,17 @@ AnthropicAdapter::generate(const llm::GenerateOptions& opts,
         }
 
         // --- 401 / 403: authentication failure ---
-        if (res->status == 401 || res->status == 403) {
+        if (handle.response->status == 401 ||
+            handle.response->status == 403) {
             return tl::make_unexpected(llm::Error::Auth(
                 "Authentication failed (HTTP " +
-                std::to_string(res->status) + ")"));
+                std::to_string(handle.response->status) + ")"));
         }
 
         // --- Other errors ---
         return tl::make_unexpected(llm::Error::Provider(
-            "API error (HTTP " + std::to_string(res->status) + ")"));
+            "API error (HTTP " + std::to_string(handle.response->status) +
+            ")"));
     }
 
     return tl::make_unexpected(llm::Error::Provider(

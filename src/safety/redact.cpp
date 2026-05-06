@@ -15,8 +15,8 @@ std::string redact_for_log(std::string_view raw) {
         SafetyEvent event;
         event.severity = Severity::LOW;
         event.category = Category::INTERNAL;
-        event.redacted_input = std::string(raw);
-        event.redacted_output = result;
+        event.redacted_input = "[REDACTED]";
+        event.redacted_output = "[REDACTED]";
         event.detail = "Log redaction: content was modified by canonical pipeline";
         event.timestamp = std::chrono::system_clock::now();
 

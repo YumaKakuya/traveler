@@ -31,6 +31,7 @@ mount(CockpitState& state, std::string_view callsign) {
     MountedEntry entry;
     entry.status = CallsignStatus::Snapshot;
     entry.mounted_at = std::chrono::system_clock::now();
+    entry.snapshot = make_default_snapshot(key);
     state.mounts[key] = entry;
 
     // If this is the first mount, auto-focus it
@@ -93,15 +94,15 @@ focus(CockpitState& state, std::string_view callsign) {
         std::string prev = *state.focused;
         if (is_mounted(state, prev)) {
             // Capture a snapshot of the current focused callsign
-            (void)capture_snapshot(prev, "", to_string(CallsignStatus::Snapshot));
+            state.mounts[prev].snapshot = capture_snapshot(prev, "", to_string(CallsignStatus::Snapshot));
             // Transition to Snapshot status
             state.mounts[prev].status = CallsignStatus::Snapshot;
         }
     }
 
     // REQ-COCKPIT-4 step 2-3: Reconstruct target from snapshot+SQLite
-    // Phase 0: invoke capture to simulate restore of the target's snapshot state
-    (void)capture_snapshot(key, "", to_string(CallsignStatus::Focused));
+    // Phase 0: restore target's focused state from stored snapshot
+    state.mounts[key].snapshot.status = to_string(CallsignStatus::Focused);
 
     // REQ-COCKPIT-4 step 4: Render — set focus and status
     state.focused = key;
@@ -120,6 +121,8 @@ unfocus(CockpitState& state) {
 
     std::string prev = *state.focused;
     if (is_mounted(state, prev)) {
+        // Capture current state as snapshot before unfocusing
+        state.mounts[prev].snapshot = capture_snapshot(prev, "", to_string(CallsignStatus::Snapshot));
         state.mounts[prev].status = CallsignStatus::Snapshot;
     }
     state.focused.reset();

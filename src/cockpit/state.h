@@ -2,6 +2,8 @@
 // Reference: Traveler_Phase0_Spec_v0.1.md REQ-COCKPIT-1, REQ-COCKPIT-2, REQ-COCKPIT-3
 #pragma once
 
+#include "cockpit/snapshot.h"
+
 #include <chrono>
 #include <optional>
 #include <string>
@@ -28,6 +30,7 @@ enum class CallsignStatus {
 struct MountedEntry {
     CallsignStatus status{CallsignStatus::Snapshot};
     std::chrono::system_clock::time_point mounted_at;
+    CockpitSnapshot snapshot;  // actual captured snapshot (REQ-COCKPIT-6 budget check)
 };
 
 // ============================================================================
