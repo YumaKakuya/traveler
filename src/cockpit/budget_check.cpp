@@ -27,7 +27,7 @@ BudgetCheckResult check_snapshot_budget(const CockpitSnapshot& snapshot,
         std::string detail = "snapshot size " + std::to_string(size) +
                              " bytes exceeds 256 KB budget";
         emit_budget_violation(callsign, detail);
-        return {false, detail};
+        return {false, callsign + ": " + detail};
     }
     return {true, "snapshot within budget (" + std::to_string(size) + " bytes)"};
 }

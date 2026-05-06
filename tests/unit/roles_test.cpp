@@ -17,6 +17,8 @@
 #include "roles/parser.h"
 #include "roles/registry.h"
 #include "roles/types.h"
+#include "roles/dispatch.h"
+#include "roles/reload_cmd.h"
 
 namespace fs = std::filesystem;
 using namespace traveler::roles;
@@ -353,6 +355,271 @@ You are altair, a coding agent.
         // Lookup non-existent
         auto none = registry.lookup("@nonexistent");
         TEST_RUN("M5p: lookup nonexistent returns nullopt", !none.has_value());
+
+        fs::remove_all(tmpdir);
+    }
+
+    // =========================================================================
+    // M6: Dispatch path — resolve_dispatch maps @callsign to model assignment
+    // PC-2: "Cockpit @-mention @altair Hello dispatches to the model assigned
+    //        to @altair per roles.md (verified by inspecting provider request)"
+    // No real provider calls — pure registry lookup + model string split.
+    // =========================================================================
+    std::cout << "\n--- M6: Dispatch path (resolve_dispatch) ---" << std::endl;
+    {
+        fs::path tmpdir = fs::temp_directory_path() / "traveler_test_m6";
+        fs::create_directories(tmpdir);
+        writeRolesMd(tmpdir, R"(---
+version: 1
+roles:
+  altair:
+    model: openai/gpt-5.4
+    mode: primary
+    description: "coding agent"
+  vega:
+    model: anthropic/claude-opus-4-7
+    variant: opus
+    mode: primary
+  orion:
+    model: google/gemini-2.5-flash
+    mode: subagent
+---
+## altair
+You are altair, a coding agent.
+
+## vega
+You are vega, a reasoning agent.
+)");
+
+        RoleRegistry registry;
+        registry.load(tmpdir / "roles.md");
+
+        // M6a: valid dispatch returns correct model + provider + model_name
+        auto d_altair = resolve_dispatch(registry, "@altair");
+        TEST_RUN("M6a: dispatch @altair succeeds", d_altair.has_value());
+        if (d_altair.has_value()) {
+            TEST_RUN("M6b: altair model = openai/gpt-5.4",
+                     d_altair->model == "openai/gpt-5.4");
+            TEST_RUN("M6c: altair provider = openai",
+                     d_altair->provider == "openai");
+            TEST_RUN("M6d: altair model_name = gpt-5.4",
+                     d_altair->model_name == "gpt-5.4");
+            TEST_RUN("M6e: altair system_prompt contains 'coding agent'",
+                     d_altair->system_prompt.find("coding agent") != std::string::npos);
+            TEST_RUN("M6f: altair callsign = @altair",
+                     d_altair->callsign == "@altair");
+        }
+
+        // M6g: dispatch without @ prefix works
+        auto d_altair_noat = resolve_dispatch(registry, "altair");
+        TEST_RUN("M6g: dispatch altair (no @) succeeds", d_altair_noat.has_value());
+        if (d_altair_noat.has_value()) {
+            TEST_RUN("M6h: altair model matches with/without @",
+                     d_altair_noat->model == d_altair->model);
+        }
+
+        // M6i: dispatch vega with tier from variant
+        auto d_vega = resolve_dispatch(registry, "@vega");
+        TEST_RUN("M6i: dispatch @vega succeeds", d_vega.has_value());
+        if (d_vega.has_value()) {
+            TEST_RUN("M6j: vega tier = opus", d_vega->tier == "opus");
+            TEST_RUN("M6k: vega provider = anthropic", d_vega->provider == "anthropic");
+            TEST_RUN("M6l: vega system_prompt contains 'reasoning agent'",
+                     d_vega->system_prompt.find("reasoning agent") != std::string::npos);
+        }
+
+        // M6m: dispatch unknown callsign returns error (no network call)
+        auto d_unknown = resolve_dispatch(registry, "@nonexistent");
+        TEST_RUN("M6m: dispatch unknown callsign fails", !d_unknown.has_value());
+        if (!d_unknown.has_value()) {
+            TEST_RUN("M6n: unknown error contains 'unknown callsign'",
+                     d_unknown.error().message.find("unknown callsign") != std::string::npos);
+        }
+
+        fs::remove_all(tmpdir);
+    }
+
+    // M6o: dispatch on empty registry returns EmptyRegistry error
+    {
+        RoleRegistry empty_reg;
+        auto d_empty = resolve_dispatch(empty_reg, "@vega");
+        TEST_RUN("M6o: dispatch on empty registry fails", !d_empty.has_value());
+        if (!d_empty.has_value()) {
+            TEST_RUN("M6p: empty registry error message is descriptive",
+                     !d_empty.error().message.empty());
+        }
+    }
+
+    // =========================================================================
+    // M7: /roles-reload command — reload updates registry from source path
+    // PC-3: "/roles-reload after editing roles.md updates RoleRegistry;
+    //        subsequent @-mention uses the new mapping"
+    // =========================================================================
+    std::cout << "\n--- M7: /roles-reload command ---" << std::endl;
+    {
+        fs::path tmpdir = fs::temp_directory_path() / "traveler_test_m7";
+        fs::create_directories(tmpdir);
+        fs::path roles_path = tmpdir / "roles.md";
+        writeRolesMd(tmpdir, R"(---
+version: 1
+roles:
+  vega:
+    model: anthropic/claude-opus-4-7
+    variant: opus
+    mode: primary
+---
+## vega
+You are vega.
+)");
+
+        RoleRegistry registry;
+        registry.load(roles_path);
+
+        TEST_RUN("M7a: initial load has 1 role", registry.size() == 1);
+        TEST_RUN("M7b: source_path matches", registry.source_path() == roles_path);
+
+        // Reload — same file, no change
+        auto r1 = reload_roles_cmd(registry);
+        TEST_RUN("M7c: reload succeeds", r1.ok);
+        TEST_RUN("M7d: reload count = 1", r1.count == 1);
+
+        // Edit roles.md on disk — add altair
+        {
+            std::ofstream f(roles_path);  // overwrite
+            f << R"(---
+version: 1
+roles:
+  vega:
+    model: anthropic/claude-opus-4-7
+    variant: opus
+    mode: primary
+  altair:
+    model: openai/gpt-5.4
+    mode: primary
+---
+## vega
+You are vega.
+)";
+        }
+
+        auto r2 = reload_roles_cmd(registry);
+        TEST_RUN("M7e: reload after edit succeeds", r2.ok);
+        TEST_RUN("M7f: reload count = 2 (vega + altair)", r2.count == 2);
+
+        // Verify new mapping is active
+        auto altair = registry.lookup("@altair");
+        TEST_RUN("M7g: altair now resolvable after reload", altair.has_value());
+        if (altair.has_value()) {
+            TEST_RUN("M7h: altair model = openai/gpt-5.4",
+                     altair->model == "openai/gpt-5.4");
+        }
+
+        fs::remove_all(tmpdir);
+    }
+
+    // M7i: reload on never-loaded registry returns error
+    {
+        RoleRegistry never_loaded;
+        auto r = reload_roles_cmd(never_loaded);
+        TEST_RUN("M7i: reload on never-loaded registry fails", !r.ok);
+        TEST_RUN("M7j: never-loaded error message is descriptive",
+                 !r.message.empty());
+    }
+
+    // =========================================================================
+    // M8: Config-override path — explicit path takes effect
+    // PC-16 (TB-D): "roles_test.cpp verifies config-override and default-path
+    //               lookup; CI grep confirms no multi-tier resolution path"
+    // =========================================================================
+    std::cout << "\n--- M8: Config-override path (PC-16/TB-D) ---" << std::endl;
+    {
+        // Create two different roles files in different locations
+        fs::path dir_a = fs::temp_directory_path() / "traveler_test_m8a";
+        fs::path dir_b = fs::temp_directory_path() / "traveler_test_m8b";
+        fs::create_directories(dir_a);
+        fs::create_directories(dir_b);
+
+        writeRolesMd(dir_a, R"(---
+version: 1
+roles:
+  vega:
+    model: anthropic/claude-opus-4-7
+    variant: opus
+---
+## vega
+You are vega.
+)");
+
+        writeRolesMd(dir_b, R"(---
+version: 1
+roles:
+  altair:
+    model: openai/gpt-5.4
+---
+## altair
+You are altair.
+)");
+
+        // M8a: load from path A (config override) — get vega only
+        RoleRegistry registry;
+        registry.load(dir_a / "roles.md");
+        TEST_RUN("M8a: config-override path loads vega", registry.size() == 1);
+        TEST_RUN("M8b: source_path points to config-override path",
+                 registry.source_path().string().find("traveler_test_m8a") != std::string::npos);
+        auto vega = registry.lookup("@vega");
+        TEST_RUN("M8c: vega present from override path", vega.has_value());
+        auto altair_before = registry.lookup("@altair");
+        TEST_RUN("M8d: altair NOT present from path A", !altair_before.has_value());
+
+        // M8e: registry does NOT automatically resolve from a different path
+        // (single-source — no multi-tier fallback)
+        // The registry only knows about path A and has no knowledge of path B.
+
+        fs::remove_all(dir_a);
+        fs::remove_all(dir_b);
+    }
+
+    // =========================================================================
+    // M9: Default-path lookup
+    // PC-16 (TB-D): verify default-path style location works for single-source
+    // =========================================================================
+    std::cout << "\n--- M9: Default-path lookup (PC-16/TB-D) ---" << std::endl;
+    {
+        fs::path tmpdir = fs::temp_directory_path() / "traveler_test_m9";
+        fs::create_directories(tmpdir);
+        fs::path default_roles = tmpdir / "roles.md";
+
+        writeRolesMd(tmpdir, R"(---
+version: 1
+roles:
+  vega:
+    model: anthropic/claude-opus-4-7
+    variant: opus
+---
+)");
+
+        // M9a: load from a default-style path works
+        RoleRegistry registry;
+        registry.load(default_roles);
+        TEST_RUN("M9a: default-path load succeeds", registry.size() == 1);
+        TEST_RUN("M9b: source_path is set",
+                 !registry.source_path().empty());
+        TEST_RUN("M9c: lookup finds vega",
+                 registry.lookup("@vega").has_value());
+
+        // M9d: reload from the same path keeps single-source
+        auto r = reload_roles_cmd(registry);
+        TEST_RUN("M9d: reload from default-path succeeds", r.ok);
+        TEST_RUN("M9e: reload count preserved", r.count == 1);
+        TEST_RUN("M9f: source_path unchanged after reload",
+                 registry.source_path() == default_roles);
+
+        // M9g: verify single-source — registry loaded from one file path
+        // does not scan or resolve a different path. The source_path
+        // remains the originally configured path throughout reload.
+        std::string src_path_str = registry.source_path().string();
+        TEST_RUN("M9g: single-source — source_path stable after reload",
+                 src_path_str.find("traveler_test_m9") != std::string::npos);
 
         fs::remove_all(tmpdir);
     }

@@ -34,6 +34,12 @@ jobs:
           xmake build -v test_safety_corpus
           xmake build -v test_safety_queue
           xmake build -v test_safety_redact
+          xmake build -v test_safety_backtrack
+          xmake build -v test_safety_jsonl
+          xmake build -v test_safety_benchmark
+          xmake build -v test_safety_budget
+          xmake build -v test_cockpit
+          xmake build -v test_adapters_corpus
 
       - name: Run PmoQa unit tests
         run: |
@@ -41,6 +47,12 @@ jobs:
           xmake run test_safety_corpus
           xmake run test_safety_queue
           xmake run test_safety_redact
+          xmake run test_safety_backtrack
+          xmake run test_safety_jsonl
+          xmake run test_safety_benchmark
+          xmake run test_safety_budget
+          xmake run test_cockpit
+          xmake run test_adapters_corpus
 
   build:
     name: ${{ matrix.os }} ${{ matrix.arch }} ${{ matrix.build }}
@@ -93,6 +105,19 @@ jobs:
 
       - name: Build traveler binary
         run: xmake build -v traveler
+
+      - name: Version smoke (traveler --version)
+        shell: bash
+        run: |
+          # Locate the built binary and assert the version string.
+          BIN=$(find build -name traveler -type f | head -1)
+          echo "Found binary: $BIN"
+          "$BIN" --version 2>&1 | grep -q "Traveler. v0.1.0-alpha" || {
+            echo "ERROR: version string mismatch"
+            "$BIN" --version 2>&1
+            exit 1
+          }
+          echo "Version smoke PASS"
 
       - name: License audit (Unix)
         if: runner.os != 'Windows'
