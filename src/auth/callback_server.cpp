@@ -117,6 +117,8 @@ tl::expected<std::string, Error> start_oauth_server() {
 
     auto state = g_state;  // capture shared_ptr for lambda
 
+    // Register the OAuth callback route BEFORE binding, so the handler is
+    // ready when the first request arrives.
     g_server->Get(OAUTH_REDIRECT_PATH, [state](const httplib::Request& req,
                                                 httplib::Response& res) {
         std::lock_guard<std::mutex> lock(state->mtx);
@@ -163,21 +165,38 @@ tl::expected<std::string, Error> start_oauth_server() {
         res.set_content(HTML_SUCCESS, "text/html");
     });
 
-    // Try to bind to port 1456
+    // Bind BEFORE spawning the thread so we can confirm port availability
+    // synchronously.  bind_to_port() returns false immediately if the port
+    // is in use or inaccessible.
     g_server_port = 1456;
-    std::string redirect_uri =
-        "http://localhost:" + std::to_string(g_server_port) + OAUTH_REDIRECT_PATH;
+    if (!g_server->bind_to_port("127.0.0.1", g_server_port)) {
+        g_server.reset();
+        g_state.reset();
+        return tl::make_unexpected(
+            Error::Provider("Cannot bind to OAuth callback 127.0.0.1:" +
+                           std::to_string(g_server_port) +
+                           " — port may be in use or permission denied"));
+    }
 
-    // Start server on background thread
-    g_server_thread = std::make_unique<std::thread>([state]() {
-        // cpp-httplib server runs on its own thread pool.
-        // listen() blocks until stop() is called.
-        g_server->listen("127.0.0.1", g_server_port);
+    // Bind succeeded — spin up the accept-loop thread.
+    // listen_after_bind() uses the already-bound socket and blocks until stop().
+    g_server_thread = std::make_unique<std::thread>([]() {
+        if (!g_server->listen_after_bind()) {
+            // listen() or the accept loop failed after a successful bind.
+            // Signal the error through ServerState so wait_for_oauth_callback()
+            // can surface it.
+            std::lock_guard<std::mutex> lock(g_state->mtx);
+            if (!g_state->completed) {
+                g_state->result.status = CallbackStatus::error;
+                g_state->result.error_message = "OAuth callback server failed after port bind";
+                g_state->completed = true;
+                g_state->cv.notify_one();
+            }
+        }
     });
 
-    // Give the server a moment to start
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
+    std::string redirect_uri =
+        "http://localhost:" + std::to_string(g_server_port) + OAUTH_REDIRECT_PATH;
     return redirect_uri;
 }
 

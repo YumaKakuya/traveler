@@ -10,9 +10,12 @@
 
 #ifdef _WIN32
 #include <direct.h>
+#include <io.h>
 #include <process.h>
 #include <shlobj.h>
+#include <sys/stat.h>
 #include <windows.h>
+#include <aclapi.h>
 #else
 #include <pwd.h>
 #include <sys/stat.h>
@@ -63,11 +66,78 @@ static int current_process_id() {
 #endif
 }
 
-static void set_private_file_mode(const std::string& path) {
+// Returns true if the file's access was successfully restricted to the
+// current user.  On POSIX this means mode 0600 (owner rw only).  On Windows
+// this sets an explicit DACL that limits access to the current user via an
+// ACL and also applies the DOS read/write attribute as a belt-and-suspenders
+// measure.
+static bool set_private_file_mode(const std::string& path) {
 #ifdef _WIN32
-    (void)path;
+    // Belt-and-suspenders: set DOS read/write attribute for the owner.
+    ::_chmod(path.c_str(), _S_IREAD | _S_IWRITE);
+
+    // Get the current process token to identify the current user SID.
+    HANDLE hToken = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+        return false;
+    }
+
+    // Retrieve the token user SID.
+    DWORD dwSize = 0;
+    GetTokenInformation(hToken, TokenUser, nullptr, 0, &dwSize);
+    if (dwSize == 0) {
+        CloseHandle(hToken);
+        return false;
+    }
+
+    BYTE* tokenBuffer = static_cast<BYTE*>(std::malloc(dwSize));
+    if (!tokenBuffer) {
+        CloseHandle(hToken);
+        return false;
+    }
+    PTOKEN_USER pTokenUser = reinterpret_cast<PTOKEN_USER>(tokenBuffer);
+    if (!GetTokenInformation(hToken, TokenUser, pTokenUser, dwSize, &dwSize)) {
+        std::free(tokenBuffer);
+        CloseHandle(hToken);
+        return false;
+    }
+
+    // Build an EXPLICIT_ACCESS entry granting full control to the current user
+    // only.  SET_ACCESS with a null existing ACL creates a fresh ACL containing
+    // only this single ACE (no inherited entries).
+    EXPLICIT_ACCESSA ea = {};
+    ea.grfAccessPermissions = GENERIC_ALL;
+    ea.grfAccessMode = SET_ACCESS;
+    ea.grfInheritance = NO_INHERITANCE;
+    ea.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+    ea.Trustee.TrusteeType = TRUSTEE_IS_USER;
+    ea.Trustee.ptstrName = reinterpret_cast<LPSTR>(pTokenUser->User.Sid);
+
+    PACL pNewAcl = nullptr;
+    DWORD dwResult = SetEntriesInAclA(1, &ea, nullptr, &pNewAcl);
+    std::free(tokenBuffer);
+    CloseHandle(hToken);
+
+    if (dwResult != ERROR_SUCCESS) {
+        return false;
+    }
+
+    // Apply the new DACL, replacing any existing or inherited entries.
+    // Owner, group, and SACL are left unchanged (nullptr).
+    dwResult = SetNamedSecurityInfoA(
+        const_cast<LPSTR>(path.c_str()),
+        SE_FILE_OBJECT,
+        DACL_SECURITY_INFORMATION,
+        nullptr,   // owner (unchanged)
+        nullptr,   // group (unchanged)
+        pNewAcl,   // new DACL
+        nullptr    // SACL (unchanged)
+    );
+
+    LocalFree(pNewAcl);
+    return (dwResult == ERROR_SUCCESS);
 #else
-    chmod(path.c_str(), 0600);
+    return (::chmod(path.c_str(), 0600) == 0);
 #endif
 }
 
@@ -76,14 +146,29 @@ std::string credentials_file_path() {
 }
 
 static tl::expected<std::string, Error> ensure_config_dir() {
-    std::string dir = config_dir();
-    // mode 0700 for config directory on POSIX.
-    int rc = make_private_dir(dir);
+    std::string home = home_directory();
+    if (home == ".") {
+        return tl::make_unexpected(
+            Error::Provider("Cannot determine home directory for credentials storage"));
+    }
+
+    // Create intermediate directories one level at a time so that a missing
+    // parent (e.g. ~/.config) does not cause the whole chain to fail.
+    // On Windows _mkdir only creates the last path component, same as POSIX mkdir.
+    std::string config_parent = home + "/.config";
+    int rc = make_private_dir(config_parent);
     if (rc != 0 && errno != EEXIST) {
         return tl::make_unexpected(
-            Error::Provider("Cannot create config directory: " + dir));
+            Error::Provider("Cannot create directory: " + config_parent));
     }
-    return dir;
+
+    std::string traveler_dir = config_parent + "/traveler";
+    rc = make_private_dir(traveler_dir);
+    if (rc != 0 && errno != EEXIST) {
+        return tl::make_unexpected(
+            Error::Provider("Cannot create directory: " + traveler_dir));
+    }
+    return traveler_dir;
 }
 
 static tl::expected<json, Error> read_json_file(const std::string& path) {
@@ -118,14 +203,44 @@ static tl::expected<void, Error> write_json_file(
         ofs << data.dump(2) << "\n";
         ofs.close();
     }
-    // Set mode 0600 where the platform exposes POSIX permissions.
-    set_private_file_mode(tmp_path);
-    // Atomic rename
-    if (rename(tmp_path.c_str(), path.c_str()) != 0) {
+    // Restrict file access to the current user (0600 on POSIX,
+    // explicit ACL on Windows).  Fail hard if the OS cannot enforce
+    // the restriction — never write credentials with broad access.
+    if (!set_private_file_mode(tmp_path)) {
+#ifdef _WIN32
+        DeleteFileA(tmp_path.c_str());
+        return tl::make_unexpected(
+            Error::Provider("Cannot restrict ACL on credentials temp file"));
+#else
+        std::remove(tmp_path.c_str());
+        return tl::make_unexpected(
+            Error::Provider("Cannot set private mode on credentials temp file: " + tmp_path));
+#endif
+    }
+
+    // Atomic rename.  POSIX rename() atomically replaces the target.
+    // Windows rename() fails if the target already exists, so use
+    // MoveFileEx with MOVEFILE_REPLACE_EXISTING (rewrite-on-open).
+#ifdef _WIN32
+    if (!MoveFileExA(tmp_path.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+        DeleteFileA(tmp_path.c_str());
+        return tl::make_unexpected(
+            Error::Provider("Cannot finalize credentials file: " + path));
+    }
+    // Re-apply ACL on the final file: MoveFileExA within the same volume
+    // preserves the ACL, but if the config directory spans volumes the
+    // destination may inherit parent ACLs.  Belt-and-suspenders.
+    if (!set_private_file_mode(path)) {
+        return tl::make_unexpected(
+            Error::Provider("Cannot restrict ACL on credentials file"));
+    }
+#else
+    if (::rename(tmp_path.c_str(), path.c_str()) != 0) {
         std::remove(tmp_path.c_str());
         return tl::make_unexpected(
             Error::Provider("Cannot finalize credentials file: " + path));
     }
+#endif
     return {};
 }
 

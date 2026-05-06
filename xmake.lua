@@ -76,6 +76,9 @@ target("traveler")
     if not is_plat("macosx", "windows", "mingw") then
         add_packages("cpp-httplib", "openssl")
     end
+    if is_plat("windows", "mingw") then
+        add_syslinks("Advapi32")
+    end
 
 target("hello-ftxui")
     set_kind("binary")
