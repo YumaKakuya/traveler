@@ -1,0 +1,281 @@
+{
+  "version": "1.0",
+  "description": "P0-4 PC-13: Provider adapter message corpus for round-trip testing. 20 fixtures: Anthropic 5, OpenAI 5, Google 5, llama.cpp 5.",
+  "spec_ref": "docs/spec/Traveler_Phase0_Spec_v0.1.md §8 Pass Criteria PC-13",
+  "fixtures": [
+    {
+      "id": "anthropic-1",
+      "adapter": "anthropic",
+      "description": "Simple user message, no system prompt, no vendor prefix",
+      "input": {
+        "model": "claude-opus-4-7",
+        "messages": [
+          {"role": "user", "content": "Hello"}
+        ],
+        "max_tokens": 1024
+      },
+      "expected": "{\"model\":\"claude-opus-4-7\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}],\"stream\":true}"
+    },
+    {
+      "id": "anthropic-2",
+      "adapter": "anthropic",
+      "description": "Vendor prefix stripped, system prompt extracted to top-level system field",
+      "input": {
+        "model": "anthropic/claude-opus-4-7",
+        "messages": [
+          {"role": "system", "content": "You are a helpful assistant"},
+          {"role": "user", "content": "What is the capital of France?"}
+        ],
+        "max_tokens": 512
+      },
+      "expected": "{\"model\":\"claude-opus-4-7\",\"max_tokens\":512,\"system\":\"You are a helpful assistant\",\"messages\":[{\"role\":\"user\",\"content\":\"What is the capital of France?\"}],\"stream\":true}"
+    },
+    {
+      "id": "anthropic-3",
+      "adapter": "anthropic",
+      "description": "Multi-turn conversation (user -> assistant -> user)",
+      "input": {
+        "model": "claude-opus-4-7",
+        "messages": [
+          {"role": "user", "content": "Hi there"},
+          {"role": "assistant", "content": "Hello! How can I help?"},
+          {"role": "user", "content": "Tell me a joke"}
+        ],
+        "max_tokens": 2048
+      },
+      "expected": "{\"model\":\"claude-opus-4-7\",\"max_tokens\":2048,\"messages\":[{\"role\":\"user\",\"content\":\"Hi there\"},{\"role\":\"assistant\",\"content\":\"Hello! How can I help?\"},{\"role\":\"user\",\"content\":\"Tell me a joke\"}],\"stream\":true}"
+    },
+    {
+      "id": "anthropic-4",
+      "adapter": "anthropic",
+      "description": "With temperature parameter, high max_tokens",
+      "input": {
+        "model": "claude-opus-4-7",
+        "messages": [
+          {"role": "user", "content": "Write a story about a robot and a cat"}
+        ],
+        "max_tokens": 4096,
+        "temperature": 0.7
+      },
+      "expected": "{\"model\":\"claude-opus-4-7\",\"max_tokens\":4096,\"temperature\":0.7,\"messages\":[{\"role\":\"user\",\"content\":\"Write a story about a robot and a cat\"}],\"stream\":true}"
+    },
+    {
+      "id": "anthropic-5",
+      "adapter": "anthropic",
+      "description": "Default max_tokens (no max_tokens specified -> defaults to 1024)",
+      "input": {
+        "model": "claude-opus-4-7",
+        "messages": [
+          {"role": "user", "content": "Hello"}
+        ]
+      },
+      "expected": "{\"model\":\"claude-opus-4-7\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}],\"stream\":true}"
+    },
+    {
+      "id": "openai-1",
+      "adapter": "openai",
+      "description": "Simple user message, no system prompt, no vendor prefix",
+      "input": {
+        "model": "gpt-5.4",
+        "messages": [
+          {"role": "user", "content": "Hello"}
+        ],
+        "max_tokens": 1024
+      },
+      "expected": "{\"model\":\"gpt-5.4\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}],\"max_tokens\":1024,\"stream\":true}"
+    },
+    {
+      "id": "openai-2",
+      "adapter": "openai",
+      "description": "Vendor prefix stripped, system message stays in messages array",
+      "input": {
+        "model": "openai/gpt-5.4",
+        "messages": [
+          {"role": "system", "content": "You are a helpful assistant"},
+          {"role": "user", "content": "Explain quantum computing simply"}
+        ],
+        "max_tokens": 512
+      },
+      "expected": "{\"model\":\"gpt-5.4\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a helpful assistant\"},{\"role\":\"user\",\"content\":\"Explain quantum computing simply\"}],\"max_tokens\":512,\"stream\":true}"
+    },
+    {
+      "id": "openai-3",
+      "adapter": "openai",
+      "description": "Multi-turn conversation (user -> assistant -> user)",
+      "input": {
+        "model": "gpt-5.4",
+        "messages": [
+          {"role": "user", "content": "Hi"},
+          {"role": "assistant", "content": "Hey! What can I do for you?"},
+          {"role": "user", "content": "How are you doing?"}
+        ],
+        "max_tokens": 1024
+      },
+      "expected": "{\"model\":\"gpt-5.4\",\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"},{\"role\":\"assistant\",\"content\":\"Hey! What can I do for you?\"},{\"role\":\"user\",\"content\":\"How are you doing?\"}],\"max_tokens\":1024,\"stream\":true}"
+    },
+    {
+      "id": "openai-4",
+      "adapter": "openai",
+      "description": "With temperature parameter",
+      "input": {
+        "model": "gpt-5.4",
+        "messages": [
+          {"role": "user", "content": "Explain quantum computing"}
+        ],
+        "max_tokens": 2048,
+        "temperature": 0.7
+      },
+      "expected": "{\"model\":\"gpt-5.4\",\"messages\":[{\"role\":\"user\",\"content\":\"Explain quantum computing\"}],\"max_tokens\":2048,\"temperature\":0.7,\"stream\":true}"
+    },
+    {
+      "id": "openai-5",
+      "adapter": "openai",
+      "description": "Default max_tokens (no max_tokens specified -> defaults to 1024)",
+      "input": {
+        "model": "gpt-5.4",
+        "messages": [
+          {"role": "user", "content": "Hello"}
+        ]
+      },
+      "expected": "{\"model\":\"gpt-5.4\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}],\"max_tokens\":1024,\"stream\":true}"
+    },
+    {
+      "id": "google-1",
+      "adapter": "google",
+      "description": "Simple user message, no system prompt, no vendor prefix",
+      "input": {
+        "model": "gemini-2.5-flash",
+        "messages": [
+          {"role": "user", "content": "Hello"}
+        ],
+        "max_tokens": 1024
+      },
+      "expected": "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"Hello\"}]}],\"generationConfig\":{\"maxOutputTokens\":1024}}"
+    },
+    {
+      "id": "google-2",
+      "adapter": "google",
+      "description": "Vendor prefix stripped, system prompt -> systemInstruction",
+      "input": {
+        "model": "google/gemini-2.5-flash",
+        "messages": [
+          {"role": "system", "content": "You are a helpful assistant"},
+          {"role": "user", "content": "What is the weather today?"}
+        ],
+        "max_tokens": 512
+      },
+      "expected": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a helpful assistant\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"What is the weather today?\"}]}],\"generationConfig\":{\"maxOutputTokens\":512}}"
+    },
+    {
+      "id": "google-3",
+      "adapter": "google",
+      "description": "Assistant role mapped to model, multi-turn conversation",
+      "input": {
+        "model": "gemini-2.5-flash",
+        "messages": [
+          {"role": "user", "content": "Hi"},
+          {"role": "assistant", "content": "Hello! How can I help?"}
+        ],
+        "max_tokens": 1024
+      },
+      "expected": "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"Hi\"}]},{\"role\":\"model\",\"parts\":[{\"text\":\"Hello! How can I help?\"}]}],\"generationConfig\":{\"maxOutputTokens\":1024}}"
+    },
+    {
+      "id": "google-4",
+      "adapter": "google",
+      "description": "With temperature parameter",
+      "input": {
+        "model": "gemini-2.5-flash",
+        "messages": [
+          {"role": "user", "content": "Write a poem about the sea"}
+        ],
+        "max_tokens": 2048,
+        "temperature": 0.7
+      },
+      "expected": "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"Write a poem about the sea\"}]}],\"generationConfig\":{\"maxOutputTokens\":2048,\"temperature\":0.7}}"
+    },
+    {
+      "id": "google-5",
+      "adapter": "google",
+      "description": "Multi-turn with systemInstruction, assistant->model mapping, default max_tokens",
+      "input": {
+        "model": "gemini-2.5-flash",
+        "messages": [
+          {"role": "system", "content": "Be concise"},
+          {"role": "user", "content": "What is 2+2?"},
+          {"role": "assistant", "content": "4"},
+          {"role": "user", "content": "What is 3+3?"}
+        ]
+      },
+      "expected": "{\"systemInstruction\":{\"parts\":[{\"text\":\"Be concise\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"What is 2+2?\"}]},{\"role\":\"model\",\"parts\":[{\"text\":\"4\"}]},{\"role\":\"user\",\"parts\":[{\"text\":\"What is 3+3?\"}]}],\"generationConfig\":{\"maxOutputTokens\":1024}}"
+    },
+    {
+      "id": "llamacpp-1",
+      "adapter": "llamacpp",
+      "description": "Simple user message, no system prompt, no vendor prefix",
+      "input": {
+        "model": "ayane",
+        "messages": [
+          {"role": "user", "content": "Hello"}
+        ],
+        "max_tokens": 512
+      },
+      "expected": "{\"model\":\"ayane\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}],\"max_tokens\":512}"
+    },
+    {
+      "id": "llamacpp-2",
+      "adapter": "llamacpp",
+      "description": "Vendor prefix stripped, system prompt included in messages",
+      "input": {
+        "model": "llamacpp/ayane",
+        "messages": [
+          {"role": "system", "content": "You are helpful"},
+          {"role": "user", "content": "Hello"}
+        ],
+        "max_tokens": 256
+      },
+      "expected": "{\"model\":\"ayane\",\"messages\":[{\"role\":\"system\",\"content\":\"You are helpful\"},{\"role\":\"user\",\"content\":\"Hello\"}],\"max_tokens\":256}"
+    },
+    {
+      "id": "llamacpp-3",
+      "adapter": "llamacpp",
+      "description": "Multi-turn conversation (user -> assistant -> user)",
+      "input": {
+        "model": "ayane",
+        "messages": [
+          {"role": "user", "content": "Hi"},
+          {"role": "assistant", "content": "Hey there"},
+          {"role": "user", "content": "What is the weather like?"}
+        ],
+        "max_tokens": 512
+      },
+      "expected": "{\"model\":\"ayane\",\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"},{\"role\":\"assistant\",\"content\":\"Hey there\"},{\"role\":\"user\",\"content\":\"What is the weather like?\"}],\"max_tokens\":512}"
+    },
+    {
+      "id": "llamacpp-4",
+      "adapter": "llamacpp",
+      "description": "With temperature parameter, high max_tokens",
+      "input": {
+        "model": "ayane",
+        "messages": [
+          {"role": "user", "content": "Tell me a story"}
+        ],
+        "max_tokens": 1024,
+        "temperature": 0.7
+      },
+      "expected": "{\"model\":\"ayane\",\"messages\":[{\"role\":\"user\",\"content\":\"Tell me a story\"}],\"max_tokens\":1024,\"temperature\":0.7}"
+    },
+    {
+      "id": "llamacpp-5",
+      "adapter": "llamacpp",
+      "description": "Default max_tokens (no max_tokens specified -> defaults to 256 for llama.cpp)",
+      "input": {
+        "model": "ayane",
+        "messages": [
+          {"role": "user", "content": "Hello"}
+        ]
+      },
+      "expected": "{\"model\":\"ayane\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}],\"max_tokens\":256}"
+    }
+  ]
+}

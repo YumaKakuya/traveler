@@ -45,6 +45,12 @@ public:
     // Reload from the same path
     void reload();
 
+    // Return the source path from which roles were loaded (empty if never loaded).
+    // Used by reload_cmd and for test assertions on single-source resolution.
+    [[nodiscard]] const std::filesystem::path& source_path() const {
+        return source_path_;
+    }
+
 private:
     std::unordered_map<std::string, RoleEntry> entries_;
     std::filesystem::path source_path_;

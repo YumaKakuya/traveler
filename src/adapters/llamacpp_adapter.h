@@ -36,6 +36,14 @@ public:
     generate(const llm::GenerateOptions& opts,
              std::function<void(llm::GenerateChunk)> on_chunk) override;
 
+    // --- Normalisation helpers (public for testing) ---
+
+    // Convert Traveler GenerateOptions to llama.cpp chat request JSON.
+    // All messages (including system) go into the messages array.
+    // Returns JSON string representing the normalized input for llama.cpp inference.
+    [[nodiscard]] static std::string
+    to_request_json(const llm::GenerateOptions& opts);
+
 private:
     std::string model_path_;
 };

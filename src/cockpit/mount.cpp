@@ -19,12 +19,18 @@ mount(CockpitState& state, std::string_view callsign) {
     }
 
     // Check mount limit (REQ-COCKPIT-1)
+    // PC-2: "Maximum 4 callsigns in cloud mode"
+    // PC-9: "Offline mode supports a single callsign mount due to hardware budget..."
     const auto max = max_callsigns(state);
     if (mount_count(state) >= max) {
-        return tl::make_unexpected(
-            MountError::LimitExceeded(
-                std::string("Cannot mount ") + std::string(callsign) +
-                ": limit of " + std::to_string(max) + " callsign(s) reached"));
+        std::string msg;
+        if (state.cloud_mode) {
+            msg = "Maximum 4 callsigns in cloud mode";
+        } else {
+            msg = "Offline mode supports a single callsign mount due to hardware "
+                  "budget. Switch to cloud mode to use multiple callsigns.";
+        }
+        return tl::make_unexpected(MountError::LimitExceeded(std::move(msg)));
     }
 
     // Mount as Snapshot (non-focused)
