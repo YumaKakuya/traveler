@@ -8,3 +8,4 @@ BSL-1.0
 Zlib
 ISC
 CC0-1.0
+blessing

@@ -4,7 +4,17 @@ set_languages("c++20")
 
 add_rules("mode.debug", "mode.release")
 
-add_requires("ftxui", "tl_expected")
+includes("third_party/")
+
+add_requires("ftxui", "tl_expected", "nlohmann_json", "sqlite3")
+
+-- Cloud provider support (cpp-httplib+openssl) is Linux-only for now.
+-- xmake detects the GitHub Windows runner as `mingw`, so guard both names.
+if not is_plat("macosx", "windows", "mingw") then
+    add_requires("openssl")
+    add_requires("cpp-httplib", {configs = {ssl = true}})
+    add_defines("CPPHTTPLIB_OPENSSL_SUPPORT")
+end
 
 option("with_llama")
     set_default(true)
@@ -32,14 +42,40 @@ target("traveler")
     add_files("src/safety/event.cpp")
     add_files("src/safety/queue.cpp")
     add_files("src/safety/redact.cpp")
+    add_files("src/cockpit/state.cpp")
+    add_files("src/cockpit/mount.cpp")
+    add_files("src/cockpit/snapshot.cpp")
+    add_files("src/cockpit/strip.cpp")
+    add_files("src/cockpit/bg_stream.cpp")
+    add_files("src/cockpit/budget_check.cpp")
+    add_files("src/util/hash.cpp")
+    add_files("src/auth/credentials.cpp")
+    add_files("src/auth/migration.cpp")
+    add_files("src/llm/session.cpp")
+    add_files("src/persist/sessions_db.cpp")
+    if not is_plat("macosx", "windows", "mingw") then
+        add_files("src/auth/oauth.cpp")
+        add_files("src/auth/callback_server.cpp")
+        add_files("src/auth/fetch_wrapper.cpp")
+        add_files("src/adapters/anthropic_adapter.cpp")
+        add_files("src/adapters/openai_adapter.cpp")
+        add_files("src/adapters/google_adapter.cpp")
+        add_files("src/adapters/llamacpp_adapter.cpp")
+        add_files("src/adapters/tool_call.cpp")
+    end
     add_options("with_llama", "asm_hot_paths")
     if has_config("with_llama") then
         add_defines("TRAVELER_WITH_LLAMA")
+        add_includedirs("third_party/llama.cpp/include")
+        add_deps("llama")
     end
     if has_config("asm_hot_paths") then
         add_defines("TRAVELER_ASM_HOT_PATHS")
     end
-    add_packages("ftxui", "tl_expected")
+    add_packages("ftxui", "tl_expected", "nlohmann_json", "sqlite3")
+    if not is_plat("macosx", "windows", "mingw") then
+        add_packages("cpp-httplib", "openssl")
+    end
 
 target("hello-ftxui")
     set_kind("binary")

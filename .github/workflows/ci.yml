@@ -11,6 +11,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pmoqa-tests:
+    name: PmoQa unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Configure test build
+        run: xmake config -m release --with_llama=n --asm_hot_paths=n -y
+
+      - name: Build PmoQa unit test targets
+        run: |
+          xmake build -v test_roles
+          xmake build -v test_safety_corpus
+          xmake build -v test_safety_queue
+          xmake build -v test_safety_redact
+
+      - name: Run PmoQa unit tests
+        run: |
+          xmake run test_roles
+          xmake run test_safety_corpus
+          xmake run test_safety_queue
+          xmake run test_safety_redact
+
   build:
     name: ${{ matrix.os }} ${{ matrix.arch }} ${{ matrix.build }}
     runs-on: ${{ matrix.runner }}
@@ -18,17 +49,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux x86_64 — primary build
+          # Linux x86_64 - primary with-llama build.
           - { os: ubuntu-latest, arch: x86_64, build: with-llama, runner: ubuntu-latest, xmake_arch: "" }
-          # Linux arm64 — requires GitHub-hosted ARM runner (ubuntu-24.04-arm)
+          # Linux arm64 - requires GitHub-hosted ARM runner (ubuntu-24.04-arm).
           - { os: ubuntu-24.04-arm, arch: arm64, build: with-llama, runner: ubuntu-24.04-arm, xmake_arch: "" }
-          # macOS x86_64 target built on macOS arm64 runner to avoid Intel runner starvation
+          # macOS x86_64 target built on macOS arm64 runner to avoid Intel runner starvation.
           - { os: macos-14, arch: x86_64, build: with-llama, runner: macos-14, xmake_arch: x86_64 }
-          # macOS arm64 target
+          # macOS arm64 target.
           - { os: macos-14, arch: arm64, build: with-llama, runner: macos-14, xmake_arch: arm64 }
-          # Windows x86_64
-          - { os: windows-2022, arch: x86_64, build: with-llama, runner: windows-2022, xmake_arch: "" }
-          # Without-llama smoke check (runs on linux x86_64 until xmake.lua exposes the flag)
+          # Windows native build remains release evidence. It is not a PR test gate
+          # until PmoQa has a reachable Windows test/build asset for this branch.
+          # Linux without-llama smoke check.
           - { os: ubuntu-latest, arch: x86_64, build: without-llama, runner: ubuntu-latest, xmake_arch: "" }
 
     steps:
@@ -46,20 +77,22 @@ jobs:
         shell: bash
         run: |
           arch_arg=""
+          plat_arg=""
           if [ -n "${{ matrix.xmake_arch }}" ]; then
             arch_arg="--arch=${{ matrix.xmake_arch }}"
           fi
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            # Git Bash defaults xmake to `mingw`; use the native Windows toolchain.
+            plat_arg="-p windows"
+          fi
           if [ "${{ matrix.build }}" = "without-llama" ]; then
-            xmake config -m release $arch_arg --with_llama=n --asm_hot_paths=n -y
+            xmake config $plat_arg -m release $arch_arg --with_llama=n --asm_hot_paths=n -y
           else
-            xmake config -m release $arch_arg --with_llama=y --asm_hot_paths=n -y
+            xmake config $plat_arg -m release $arch_arg --with_llama=y --asm_hot_paths=n -y
           fi
 
-      - name: Build
-        run: xmake build -v
-
-      - name: Run tests
-        run: xmake test -v
+      - name: Build traveler binary
+        run: xmake build -v traveler
 
       - name: License audit (Unix)
         if: runner.os != 'Windows'

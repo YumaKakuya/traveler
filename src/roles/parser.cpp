@@ -240,37 +240,41 @@ parseRoles(const std::string& directory) {
     // --- Body H2 section parsing (roles.ts L99-108) ---
     std::unordered_map<std::string, std::string> bodyPrompts;
     {
-        std::regex h2_regex(R"(^## (.+)$)", std::regex::multiline);
-        std::vector<std::string> headers;
-        {
-            auto it = std::sregex_iterator(body.begin(), body.end(), h2_regex);
-            auto end_it = std::sregex_iterator();
-            for (; it != end_it; ++it) {
-                headers.push_back((*it)[1].str());
+        std::string current_name;
+        std::string current_content;
+        auto flush_section = [&]() {
+            if (!current_name.empty()) {
+                bodyPrompts[trim(current_name)] = trim(current_content);
+                current_content.clear();
             }
-        }
+        };
 
-        // Split body by H2 headers
-        std::regex split_re(R"(^## .+$)", std::regex::multiline);
-        std::vector<std::string> sections;
-        {
-            auto it = std::sregex_token_iterator(body.begin(), body.end(), split_re, -1);
-            auto end_it = std::sregex_token_iterator();
-            for (; it != end_it; ++it) {
-                sections.push_back(it->str());
+        size_t line_start = 0;
+        while (line_start <= body.size()) {
+            size_t line_end = body.find('\n', line_start);
+            if (line_end == std::string::npos) {
+                line_end = body.size();
             }
-        }
 
-        // Map headers to their content (sections[i+1] corresponds to headers[i])
-        // sections[0] is content before the first H2
-        for (size_t i = 0; i < headers.size(); ++i) {
-            std::string name = trim(headers[i]);
-            std::string content_text;
-            if (i + 1 < sections.size()) {
-                content_text = trim(sections[i + 1]);
+            std::string line = body.substr(line_start, line_end - line_start);
+            if (!line.empty() && line.back() == '\r') {
+                line.pop_back();
             }
-            bodyPrompts[name] = content_text;
+
+            if (line.rfind("## ", 0) == 0) {
+                flush_section();
+                current_name = line.substr(3);
+            } else if (!current_name.empty()) {
+                current_content += line;
+                current_content += '\n';
+            }
+
+            if (line_end == body.size()) {
+                break;
+            }
+            line_start = line_end + 1;
         }
+        flush_section();
     }
 
     // roles.ts L111-114: warn if H2 heading doesn't match a role
