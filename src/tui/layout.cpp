@@ -4,6 +4,7 @@
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/dom/node.hpp>
 #include <ftxui/screen/screen.hpp>
+#include <ftxui/screen/terminal.hpp>
 
 #include <algorithm>
 #include <memory>
@@ -13,23 +14,52 @@
 namespace traveler::tui {
 namespace {
 
-ftxui::Element strip_element(const LayoutModel& model, int height) {
-    ftxui::Elements seats;
-    const auto& callsigns = model.callsigns.empty() ? LayoutModel{}.callsigns : model.callsigns;
-    std::string summary;
-    for (const auto& callsign : callsigns) {
-        if (!summary.empty()) {
-            summary += " ";
+ftxui::Element strip_element(const LayoutModel& model, const LayoutState& state) {
+    const auto bp = state.current_breakpoint;
+    static const auto kFallbackCallsigns = LayoutModel{}.callsigns;
+    const auto& callsigns = model.callsigns.empty() ? kFallbackCallsigns : model.callsigns;
+
+    ftxui::Element content;
+    int min_height;
+
+    switch (bp) {
+        case Breakpoint::Wide:
+        case Breakpoint::Mid: {
+            ftxui::Elements seats;
+            for (const auto& cs : callsigns) {
+                seats.push_back(ftxui::text(cs + " ready") | ftxui::border | ftxui::flex);
+            }
+            content = ftxui::vbox({
+                ftxui::text("Strip | " + model.mode + " | " + breakpoint_name(bp)) | ftxui::bold,
+                ftxui::hbox(std::move(seats)) | ftxui::flex,
+            });
+            min_height = 3;
+            break;
         }
-        summary += callsign;
-        seats.push_back(ftxui::text(callsign + " ready") | ftxui::border | ftxui::flex);
+        case Breakpoint::Narrow: {
+            std::string summary;
+            for (const auto& cs : callsigns) {
+                if (!summary.empty()) summary += " ";
+                summary += cs;
+            }
+            content = ftxui::vbox({
+                ftxui::text("Strip | " + model.mode + " | " + summary
+                            + " (" + breakpoint_name(bp) + ")") | ftxui::bold,
+            });
+            min_height = 2;
+            break;
+        }
+        case Breakpoint::Tiny: {
+            content = ftxui::vbox({
+                ftxui::text("Strip | " + model.mode + " (" + breakpoint_name(bp) + ")") | ftxui::bold,
+            });
+            min_height = 1;
+            break;
+        }
     }
 
-    return ftxui::vbox({
-               ftxui::text("Strip | " + model.mode + " | " + summary) | ftxui::bold,
-               ftxui::hbox(std::move(seats)) | ftxui::flex,
-           }) |
-           ftxui::border | ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, std::max(3, height));
+    return content | ftxui::border
+           | ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, std::max(min_height, state.strip_height));
 }
 
 ftxui::Element stage_element(const LayoutModel& model) {
@@ -52,7 +82,7 @@ ftxui::Element tower_element(const LayoutModel& model, int height) {
 
 ftxui::Element layout_element(const LayoutModel& model, const LayoutState& state) {
     return ftxui::vbox({
-               strip_element(model, state.strip_height),
+               strip_element(model, state),
                stage_element(model),
                tower_element(model, state.tower_height),
            }) |
@@ -69,13 +99,15 @@ std::shared_ptr<LayoutState> shared_state(LayoutState* state) {
 }  // namespace
 
 Breakpoint breakpoint_for_columns(int columns) {
-    if (columns >= 1100) {
+    // Realistic terminal-width breakpoints:
+    // wide ≥ 160 cols, mid ≥ 120, narrow ≥ 80, tiny < 80.
+    if (columns >= 160) {
         return Breakpoint::Wide;
     }
-    if (columns >= 800) {
+    if (columns >= 120) {
         return Breakpoint::Mid;
     }
-    if (columns >= 600) {
+    if (columns >= 80) {
         return Breakpoint::Narrow;
     }
     return Breakpoint::Tiny;
@@ -100,7 +132,9 @@ ftxui::Component make_layout_component(LayoutModel model, LayoutState* state) {
     auto state_ptr = shared_state(state);
 
     auto strip = ftxui::Renderer([model_ptr, state_ptr] {
-        return strip_element(*model_ptr, state_ptr->strip_height);
+        state_ptr->current_breakpoint =
+            breakpoint_for_columns(ftxui::Terminal::Size().dimx);
+        return strip_element(*model_ptr, *state_ptr);
     });
     auto stage = ftxui::Renderer([model_ptr] { return stage_element(*model_ptr); });
     auto tower = ftxui::Renderer([model_ptr, state_ptr] {
@@ -112,6 +146,7 @@ ftxui::Component make_layout_component(LayoutModel model, LayoutState* state) {
 }
 
 std::string render_layout_snapshot(const LayoutModel& model, int columns, int rows, LayoutState state) {
+    state.current_breakpoint = breakpoint_for_columns(columns);
     auto root = layout_element(model, state);
     auto screen = ftxui::Screen::Create(ftxui::Dimension::Fixed(std::max(40, columns)),
                                         ftxui::Dimension::Fixed(std::max(12, rows)));

@@ -154,9 +154,14 @@ parseFrontmatter(const std::string& content) {
 // ============================================================================
 
 tl::expected<std::unordered_map<std::string, ParsedRole>, Error>
-parseRoles(const std::string& directory) {
+parseRoles(const std::string& path) {
     namespace fs = std::filesystem;
-    fs::path filePath = fs::path(directory) / "roles.md";
+    fs::path filePath = path;
+    // If the path is a directory, append "roles.md" for backward compatibility.
+    // If it's an existing file, use it directly (exact path handling per REQ-ROLES-1/2).
+    if (fs::is_directory(filePath)) {
+        filePath = filePath / "roles.md";
+    }
 
     // --- File existence check (roles.ts L66-68) ---
     if (!fs::exists(filePath)) {
@@ -293,10 +298,15 @@ parseRoles(const std::string& directory) {
             continue;  // skip protected agents
         }
 
+        // Skip roles without a valid model string (REQ-ROLES-1/2)
+        auto model_it = props.find("model");
+        if (model_it == props.end() || model_it->second.empty() || !isValidModelFormat(model_it->second)) {
+            continue;
+        }
+
         ParsedRole parsed;
 
         // model (roles.ts L132-140)
-        auto model_it = props.find("model");
         if (model_it != props.end()) {
             std::string modelStr = model_it->second;
             if (isValidModelFormat(modelStr)) {
