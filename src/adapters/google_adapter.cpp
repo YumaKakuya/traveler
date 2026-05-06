@@ -269,8 +269,11 @@ GoogleAdapter::generate(const llm::GenerateOptions& opts,
                          std::function<void(llm::GenerateChunk)> on_chunk) {
     std::string request_json = to_request_json(opts);
 
-    // Gemini endpoint: use the model name from options for the URL path
+    // Gemini endpoint: strip vendor prefix if present; use suffix for API path/body
     std::string model = opts.model;
+    if (model.rfind("google/", 0) == 0) {
+        model = model.substr(7);  // remove "google/" prefix
+    }
     if (model.empty()) model = "gemini-pro";
 
     const std::string k_host = "generativelanguage.googleapis.com";
@@ -288,33 +291,38 @@ GoogleAdapter::generate(const llm::GenerateOptions& opts,
     };
 
     for (int attempt = 0; attempt <= k_max_retries; ++attempt) {
-        auto res = cli.Post(k_path, http_headers, request_json, "application/json");
+        std::string accumulated;
+        bool stream_error = false;
+        std::string stream_error_msg;
+        bool stream_finished = false;
 
-        if (!res) {
-            return tl::make_unexpected(llm::Error::Network(
-                "HTTP request failed to " + k_host));
-        }
+        // ContentReceiver: parse SSE stream incrementally as data arrives.
+        // Returns false only on parse error (early abort). Normal stream
+        // completion (chunk->done) returns true so httplib finishes naturally.
+        auto content_receiver = [&](const char* data, size_t data_length) -> bool {
+            if (stream_finished) return true;  // done: consume tail, don't abort
 
-        // --- 200 OK: parse SSE stream ---
-        if (res->status == 200) {
-            const std::string& body = res->body;
-            size_t pos = 0;
+            accumulated.append(data, data_length);
 
-            while (pos < body.size()) {
-                auto data_start = body.find("data: ", pos);
-                if (data_start == std::string::npos) break;
-
-                data_start += 6;
-                auto data_end = body.find('\n', data_start);
-                std::string data_line;
-                if (data_end != std::string::npos) {
-                    data_line = body.substr(data_start,
-                        data_end - data_start);
-                    pos = data_end + 1;
-                } else {
-                    data_line = body.substr(data_start);
-                    pos = body.size();
+            size_t line_start = 0;
+            while (true) {
+                auto data_pos = accumulated.find("data: ", line_start);
+                if (data_pos == std::string::npos) {
+                    // Trim processed prefix to bound memory
+                    if (line_start > 0) accumulated.erase(0, line_start);
+                    break;
                 }
+
+                // Keep partial "data: " prefix (without newline) for next chunk
+                auto line_end = accumulated.find('\n', data_pos);
+                if (line_end == std::string::npos) {
+                    if (line_start > 0) accumulated.erase(0, line_start);
+                    break;
+                }
+
+                data_pos += 6;  // skip "data: "
+                std::string data_line = accumulated.substr(data_pos, line_end - data_pos);
+                line_start = line_end + 1;
 
                 if (!data_line.empty() && data_line.back() == '\r') {
                     data_line.pop_back();
@@ -324,23 +332,50 @@ GoogleAdapter::generate(const llm::GenerateOptions& opts,
 
                 auto chunk = from_sse_line(data_line);
                 if (!chunk) {
-                    llm::GenerateChunk err_chunk;
-                    err_chunk.done = true;
-                    err_chunk.error_message =
-                        "SSE parse error: " + chunk.error().message;
-                    on_chunk(err_chunk);
-                    return {};
+                    stream_error = true;
+                    stream_error_msg = "SSE parse error: " + chunk.error().message;
+                    return false;  // stop receiving
                 }
 
                 on_chunk(*chunk);
-                if (chunk->done) return {};
+                if (chunk->done) {
+                    stream_finished = true;
+                    return true;  // done normally — don't abort the transfer
+                }
             }
 
+            return true;  // keep receiving
+        };
+
+        // Single HTTP request with true incremental body streaming
+        auto result = cli.Post(k_path, http_headers, request_json,
+                               "application/json", content_receiver);
+
+        // --- Parse/protocol error detected during streaming ---
+        // Check before !result to prevent stream_error from being
+        // overwritten by generic Network failure when early-abort
+        // (content_receiver returning false on parse error) causes
+        // httplib to report a connection error.
+        if (stream_error) {
+            llm::GenerateChunk err_chunk;
+            err_chunk.done = true;
+            err_chunk.error_message = stream_error_msg;
+            on_chunk(err_chunk);
+            return {};
+        }
+
+        if (!result) {
+            return tl::make_unexpected(llm::Error::Network(
+                "HTTP request failed to " + k_host));
+        }
+
+        // --- 200 OK: body was streamed via content_receiver ---
+        if (result->status == 200) {
             return {};
         }
 
         // --- 429: rate limited ---
-        if (res->status == 429) {
+        if (result->status == 429) {
             if (attempt >= k_max_retries) {
                 return tl::make_unexpected(llm::Error::Provider(
                     "Rate limit exceeded after " +
@@ -352,14 +387,14 @@ GoogleAdapter::generate(const llm::GenerateOptions& opts,
         }
 
         // --- 401 / 403: auth failure ---
-        if (res->status == 401 || res->status == 403) {
+        if (result->status == 401 || result->status == 403) {
             return tl::make_unexpected(llm::Error::Auth(
                 "Authentication failed (HTTP " +
-                std::to_string(res->status) + ")"));
+                std::to_string(result->status) + ")"));
         }
 
         return tl::make_unexpected(llm::Error::Provider(
-            "API error (HTTP " + std::to_string(res->status) + ")"));
+            "API error (HTTP " + std::to_string(result->status) + ")"));
     }
 
     return tl::make_unexpected(llm::Error::Provider(

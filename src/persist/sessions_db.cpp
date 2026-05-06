@@ -26,6 +26,7 @@ namespace traveler::persist {
 
 static const char* SCHEMA_SQL = R"SQL(
 CREATE TABLE IF NOT EXISTS schema_version (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
     version INTEGER NOT NULL
 );
 
@@ -193,7 +194,7 @@ tl::expected<void, llm::Error> SessionsDb::migrate_schema(int current_version) {
     for (int v = current_version + 1; v <= kCurrentSchemaVersion; ++v) {
         // Placeholder for future migrations
         std::string update =
-            "INSERT OR REPLACE INTO schema_version (version) VALUES ("
+            "INSERT OR REPLACE INTO schema_version (id, version) VALUES (1, "
             + std::to_string(v) + ")";
         auto result = exec(update);
         if (!result) return result;

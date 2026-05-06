@@ -58,9 +58,10 @@ BudgetCheckResult check_cockpit_budget(const CockpitState& state,
     for (const auto& [callsign, entry] : state.mounts) {
         if (entry.status == CallsignStatus::Unmounted) continue;
 
-        // Build a representative CockpitSnapshot for this callsign and
-        // check its memory footprint against the 256 KB budget.
-        auto snapshot = make_default_snapshot(callsign);
+        // Check the actual captured snapshot's memory footprint against
+        // the 256 KB budget (REQ-COCKPIT-6).  The snapshot is stored in
+        // MountedEntry by the mount/focus/unfocus lifecycle transitions.
+        const auto& snapshot = entry.snapshot;
         std::size_t size = snapshot_size_bytes(snapshot);
         if (size > CockpitSnapshot::max_snapshot_bytes()) {
             std::string detail = "callsign " + callsign +
