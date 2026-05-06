@@ -25,6 +25,7 @@ struct LayoutModel {
 struct LayoutState {
     int strip_height{3};
     int tower_height{5};
+    Breakpoint current_breakpoint{Breakpoint::Narrow};
 };
 
 Breakpoint breakpoint_for_columns(int columns);

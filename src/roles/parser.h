@@ -17,13 +17,15 @@ namespace traveler::roles {
 // ============================================================================
 // parseRoles — port of parseRoles() from roles.ts L61-155
 //
-// Reads roles.md from the given directory and returns a map of role name
-// to ParsedRole. On file-not-found, returns empty map (no error).
+// Reads a roles.md file and returns a map of role name to ParsedRole.
+// Accepts either a directory (appends "roles.md") or an exact file path.
+// On file-not-found, returns empty map (no error).
 // On parse/validation failure, returns Error with message (faithful to
 // roles.ts which logs warnings and returns empty map).
+// Roles without a valid model string are skipped (REQ-ROLES-1/2).
 // ============================================================================
 tl::expected<std::unordered_map<std::string, ParsedRole>, Error>
-parseRoles(const std::string& directory);
+parseRoles(const std::string& path);
 
 // ============================================================================
 // Constants from roles.ts

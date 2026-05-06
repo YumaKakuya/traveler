@@ -10,7 +10,7 @@ void RoleRegistry::load(const std::filesystem::path& roles_md) {
     last_error_.clear();
     entries_.clear();
 
-    auto result = parseRoles(source_path_.parent_path().string());
+    auto result = parseRoles(source_path_.string());
     if (!result.has_value()) {
         last_error_ = result.error().message;
         return;
@@ -18,6 +18,11 @@ void RoleRegistry::load(const std::filesystem::path& roles_md) {
 
     const auto& parsed_map = result.value();
     for (const auto& [name, parsed] : parsed_map) {
+        // REQ-ROLES-1/2: skip roles with no valid provider/model string
+        if (parsed.model.empty()) {
+            continue;
+        }
+
         RoleEntry entry;
         // Callsign: prepend '@' if not already present
         entry.callsign = "@" + name;

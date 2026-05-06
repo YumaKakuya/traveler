@@ -73,16 +73,26 @@ void print_layout_snapshot() {
 }  // namespace
 
 int main(int argc, char** argv) {
-    if (argc > 1 && std::strcmp(argv[1], "--version") == 0) {
-        std::printf("Traveler. v0.1.0-alpha\n");
-        return 0;
-    }
-    if (argc > 1 && std::strcmp(argv[1], "--self-test-dispatcher") == 0) {
-        return run_dispatcher_self_test() ? 0 : 1;
-    }
-    if (argc > 1 && std::strcmp(argv[1], "--layout-snapshot") == 0) {
-        print_layout_snapshot();
-        return 0;
+    if (argc > 1) {
+        if (argc > 2) {
+            std::fprintf(stderr,
+                         "Usage: traveler [--version | --self-test-dispatcher | --layout-snapshot]\n");
+            return 1;
+        }
+        if (std::strcmp(argv[1], "--version") == 0) {
+            std::printf("Traveler. v0.1.0-alpha\n");
+            return 0;
+        }
+        if (std::strcmp(argv[1], "--self-test-dispatcher") == 0) {
+            return run_dispatcher_self_test() ? 0 : 1;
+        }
+        if (std::strcmp(argv[1], "--layout-snapshot") == 0) {
+            print_layout_snapshot();
+            return 0;
+        }
+        std::fprintf(stderr,
+                     "Usage: traveler [--version | --self-test-dispatcher | --layout-snapshot]\n");
+        return 1;
     }
     print_layout_snapshot();
     return 0;
