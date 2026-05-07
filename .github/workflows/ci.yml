@@ -40,6 +40,11 @@ jobs:
           xmake build -v test_safety_budget
           xmake build -v test_cockpit
           xmake build -v test_adapters_corpus
+          xmake build -v test_editor
+          xmake build -v test_pane_command
+          xmake build -v test_git_mode
+          xmake build -v test_llm_mode
+          xmake build -v test_tui_surface
 
       - name: Run PmoQa unit tests
         run: |
@@ -53,6 +58,11 @@ jobs:
           xmake run test_safety_budget
           xmake run test_cockpit
           xmake run test_adapters_corpus
+          xmake run test_editor
+          xmake run test_pane_command
+          xmake run test_git_mode
+          xmake run test_llm_mode
+          xmake run test_tui_surface
 
   build:
     name: ${{ matrix.os }} ${{ matrix.arch }} ${{ matrix.build }}
