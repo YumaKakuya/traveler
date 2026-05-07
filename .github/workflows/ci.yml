@@ -45,6 +45,9 @@ jobs:
           xmake build -v test_git_mode
           xmake build -v test_llm_mode
           xmake build -v test_tui_surface
+          xmake build -v test_ayane_download
+          xmake build -v test_offline_mode
+          xmake build -v test_llamacpp_adapter_state
 
       - name: Run PmoQa unit tests
         run: |
@@ -63,6 +66,9 @@ jobs:
           xmake run test_git_mode
           xmake run test_llm_mode
           xmake run test_tui_surface
+          xmake run test_ayane_download
+          xmake run test_offline_mode
+          xmake run test_llamacpp_adapter_state
 
   build:
     name: ${{ matrix.os }} ${{ matrix.arch }} ${{ matrix.build }}
