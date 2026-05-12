@@ -327,3 +327,24 @@ target("test_treesitter")
     add_packages("tree-sitter")
     set_group("test")
     add_tests("default")
+
+-- ============================================================================
+-- P0-2 Live TUI binary — CEO hands-on evidence for PC-1 through PC-4
+-- ============================================================================
+-- Build with: xmake build -v traveler_live
+-- Run with:  xmake run traveler_live  (or ./build/.../traveler_live)
+-- Exits on Ctrl+C or Esc.
+
+target("traveler_live")
+    set_kind("binary")
+    add_includedirs("src")
+    add_files("src/tui/live_app.cpp")
+    add_files("src/core/dispatcher.cpp")
+    add_files("src/command/parser.cpp")
+    add_files("src/tui/layout.cpp")
+    add_files("src/tui/surface_model.cpp")
+    add_options("with_llama", "asm_hot_paths")
+    add_packages("ftxui")
+    if is_plat("windows", "mingw") then
+        add_syslinks("Advapi32")
+    end
