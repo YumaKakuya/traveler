@@ -28,6 +28,9 @@ jobs:
       - name: Configure test build
         run: xmake config -m release --with_llama=n --asm_hot_paths=n -y
 
+      - name: Build live TUI hands-on target
+        run: xmake build -v traveler_live
+
       - name: Build PmoQa unit test targets
         run: |
           xmake build -v test_roles
