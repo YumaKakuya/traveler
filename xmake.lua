@@ -6,7 +6,7 @@ add_rules("mode.debug", "mode.release")
 
 includes("third_party/")
 
-add_requires("ftxui", "tl_expected", "nlohmann_json", "sqlite3")
+add_requires("ftxui", "tl_expected", "nlohmann_json", "sqlite3", "tree-sitter")
 
 -- Cloud provider support (cpp-httplib+openssl) is Linux-only for now.
 -- xmake detects the GitHub Windows runner as `mingw`, so guard both names.
@@ -53,6 +53,7 @@ target("traveler")
     add_files("src/cockpit/offline_mode.cpp")
     add_files("src/util/hash.cpp")
     add_files("src/editor/editor.cpp")
+    add_files("src/editor/treesitter.cpp")
     add_files("src/pane/model.cpp")
     add_files("src/git/backend.cpp")
     add_files("src/llm/mode.cpp")
@@ -76,6 +77,7 @@ target("traveler")
         add_files("src/adapters/tool_call.cpp")
     end
     add_options("with_llama", "asm_hot_paths")
+    add_deps("treesitter_grammars")
     if has_config("with_llama") then
         add_defines("TRAVELER_WITH_LLAMA")
         add_includedirs("third_party/llama.cpp/include")
@@ -84,7 +86,7 @@ target("traveler")
     if has_config("asm_hot_paths") then
         add_defines("TRAVELER_ASM_HOT_PATHS")
     end
-    add_packages("ftxui", "tl_expected", "nlohmann_json", "sqlite3")
+    add_packages("ftxui", "tl_expected", "nlohmann_json", "sqlite3", "tree-sitter")
     if not is_plat("macosx", "windows", "mingw") then
         add_packages("cpp-httplib", "openssl")
     end
@@ -222,8 +224,11 @@ target("test_editor")
     add_includedirs("src")
     add_files("tests/unit/editor_test.cpp")
     add_files("src/editor/editor.cpp")
+    add_files("src/editor/treesitter.cpp")
     add_defines('TRAVELER_PROJECT_DIR="' .. os.projectdir() .. '"')
     set_rundir(os.projectdir())
+    add_deps("treesitter_grammars")
+    add_packages("tree-sitter")
     set_group("test")
     add_tests("default")
 
@@ -304,5 +309,21 @@ target("test_tui_surface")
     add_files("src/tui/surface_model.cpp")
     add_files("src/command/parser.cpp")
     add_files("src/core/dispatcher.cpp")
+    set_group("test")
+    add_tests("default")
+
+-- ============================================================================
+-- PC-6: Tree-sitter parse/classification evidence (10 languages)
+-- ============================================================================
+
+target("test_treesitter")
+    set_kind("binary")
+    add_includedirs("src")
+    add_files("tests/unit/treesitter_test.cpp")
+    add_files("src/editor/treesitter.cpp")
+    add_defines('TRAVELER_PROJECT_DIR="' .. os.projectdir() .. '"')
+    set_rundir(os.projectdir())
+    add_deps("treesitter_grammars")
+    add_packages("tree-sitter")
     set_group("test")
     add_tests("default")
