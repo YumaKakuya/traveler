@@ -93,3 +93,51 @@ target("llama")
         add_syslinks("m", "pthread")
     end
 target_end()
+
+-- ============================================================================
+-- Tree-sitter Grammar Libraries — REQ-EDITOR-1 (10 mainstream languages)
+-- Reference: Traveler_Phase0_Spec_v0.1.md §6.5
+-- Single static library bundling all 10 tree-sitter grammar sources.
+-- Each grammar provides a tree_sitter_<lang>() entry point.
+-- All grammars are MIT-licensed; licenses verified locally.
+-- ============================================================================
+target("treesitter_grammars")
+    set_kind("static")
+    set_basename("treesitter_grammars")
+
+    -- Include paths for each grammar's src/ directory
+    -- Each grammar provides its own tree_sitter/{parser,array,alloc}.h
+    add_includedirs(
+        "tree-sitter/tree-sitter-c/src",
+        "tree-sitter/tree-sitter-cpp/src",
+        "tree-sitter/tree-sitter-python/src",
+        "tree-sitter/tree-sitter-javascript/src",
+        "tree-sitter/tree-sitter-typescript/typescript/src",
+        "tree-sitter/tree-sitter-rust/src",
+        "tree-sitter/tree-sitter-go/src",
+        "tree-sitter/tree-sitter-java/src",
+        "tree-sitter/tree-sitter-ruby/src",
+        "tree-sitter/tree-sitter-bash/src"
+    )
+
+    -- Grammar source files: parser.c + scanner.c per language
+    add_files("tree-sitter/tree-sitter-c/src/parser.c")
+    add_files("tree-sitter/tree-sitter-cpp/src/parser.c")
+    add_files("tree-sitter/tree-sitter-cpp/src/scanner.c")
+    add_files("tree-sitter/tree-sitter-python/src/parser.c")
+    add_files("tree-sitter/tree-sitter-python/src/scanner.c")
+    add_files("tree-sitter/tree-sitter-javascript/src/parser.c")
+    add_files("tree-sitter/tree-sitter-javascript/src/scanner.c")
+    add_files("tree-sitter/tree-sitter-typescript/typescript/src/parser.c")
+    add_files("tree-sitter/tree-sitter-typescript/typescript/src/scanner.c")
+    add_files("tree-sitter/tree-sitter-rust/src/parser.c")
+    add_files("tree-sitter/tree-sitter-rust/src/scanner.c")
+    add_files("tree-sitter/tree-sitter-go/src/parser.c")
+    add_files("tree-sitter/tree-sitter-java/src/parser.c")
+    add_files("tree-sitter/tree-sitter-ruby/src/parser.c")
+    add_files("tree-sitter/tree-sitter-ruby/src/scanner.c")
+    add_files("tree-sitter/tree-sitter-bash/src/parser.c")
+    add_files("tree-sitter/tree-sitter-bash/src/scanner.c")
+
+    set_languages("c11")
+target_end()

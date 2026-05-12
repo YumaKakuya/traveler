@@ -1,3 +1,33 @@
 [submodule "third_party/llama.cpp"]
 	path = third_party/llama.cpp
 	url = https://github.com/ggerganov/llama.cpp.git
+[submodule "third_party/tree-sitter/tree-sitter-c"]
+	path = third_party/tree-sitter/tree-sitter-c
+	url = https://github.com/tree-sitter/tree-sitter-c.git
+[submodule "third_party/tree-sitter/tree-sitter-cpp"]
+	path = third_party/tree-sitter/tree-sitter-cpp
+	url = https://github.com/tree-sitter/tree-sitter-cpp.git
+[submodule "third_party/tree-sitter/tree-sitter-python"]
+	path = third_party/tree-sitter/tree-sitter-python
+	url = https://github.com/tree-sitter/tree-sitter-python.git
+[submodule "third_party/tree-sitter/tree-sitter-javascript"]
+	path = third_party/tree-sitter/tree-sitter-javascript
+	url = https://github.com/tree-sitter/tree-sitter-javascript.git
+[submodule "third_party/tree-sitter/tree-sitter-typescript"]
+	path = third_party/tree-sitter/tree-sitter-typescript
+	url = https://github.com/tree-sitter/tree-sitter-typescript.git
+[submodule "third_party/tree-sitter/tree-sitter-rust"]
+	path = third_party/tree-sitter/tree-sitter-rust
+	url = https://github.com/tree-sitter/tree-sitter-rust.git
+[submodule "third_party/tree-sitter/tree-sitter-go"]
+	path = third_party/tree-sitter/tree-sitter-go
+	url = https://github.com/tree-sitter/tree-sitter-go.git
+[submodule "third_party/tree-sitter/tree-sitter-java"]
+	path = third_party/tree-sitter/tree-sitter-java
+	url = https://github.com/tree-sitter/tree-sitter-java.git
+[submodule "third_party/tree-sitter/tree-sitter-ruby"]
+	path = third_party/tree-sitter/tree-sitter-ruby
+	url = https://github.com/tree-sitter/tree-sitter-ruby.git
+[submodule "third_party/tree-sitter/tree-sitter-bash"]
+	path = third_party/tree-sitter/tree-sitter-bash
+	url = https://github.com/tree-sitter/tree-sitter-bash.git

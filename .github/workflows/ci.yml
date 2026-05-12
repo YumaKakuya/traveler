@@ -48,6 +48,7 @@ jobs:
           xmake build -v test_ayane_download
           xmake build -v test_offline_mode
           xmake build -v test_llamacpp_adapter_state
+          xmake build -v test_treesitter
 
       - name: Run PmoQa unit tests
         run: |
@@ -69,6 +70,7 @@ jobs:
           xmake run test_ayane_download
           xmake run test_offline_mode
           xmake run test_llamacpp_adapter_state
+          xmake run test_treesitter
 
   build:
     name: ${{ matrix.os }} ${{ matrix.arch }} ${{ matrix.build }}

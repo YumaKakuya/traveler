@@ -9,3 +9,16 @@ cpp-httplib MIT
 openssl Apache-2.0
 # Submodules under third_party/
 llama.cpp MIT
+# Tree-sitter grammars (MIT, verified locally per LICENSE file in each repo)
+tree-sitter-c MIT
+tree-sitter-cpp MIT
+tree-sitter-python MIT
+tree-sitter-javascript MIT
+tree-sitter-typescript MIT
+tree-sitter-rust MIT
+tree-sitter-go MIT
+tree-sitter-java MIT
+tree-sitter-ruby MIT
+tree-sitter-bash MIT
+# Tree-sitter core (via xrepo)
+tree-sitter MIT
